@@ -1,0 +1,14 @@
+# Copy to config/companies.yaml (gitignored) and seed with:
+#   job-scout seed-companies config/companies.yaml
+# ats: greenhouse | greenhouse_eu | lever | ashby | personio | recruitee | smartrecruiters | none
+
+companies:
+  - name: Example AI GmbH
+    ats: greenhouse
+    ats_slug: exampleai
+  - name: Example Startup
+    ats: ashby
+    ats_slug: examplestartup
+  - name: Example Consulting
+    ats: none
+    careers_url: https://example.com/careers

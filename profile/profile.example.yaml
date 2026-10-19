@@ -1,0 +1,47 @@
+# Master profile: the single source of truth for every CV and cover letter.
+# Copy to profile/profile.yaml (gitignored) and fill in your real data.
+# The LLM may only select and rephrase bullets listed here, never invent facts.
+
+person:
+  name: Max Mustermann
+  email: max@example.com
+  location: Musterstadt, Germany
+  links:
+    github: https://github.com/example
+    linkedin: https://linkedin.com/in/example
+
+target:
+  roles: [Forward Deployed Engineer, Applied AI Engineer, Solutions Engineer]
+  earliest_start: 2027-03-01
+  relocation: true
+  languages: [German (native), English (C1)]
+
+education:
+  - id: edu-bsc
+    degree: B.Sc. Computer Science
+    school: Example University
+    end: 2027-02
+
+experience:
+  - id: exp-workstudent
+    title: Working Student, AI & Process Automation
+    company: Example GmbH
+    start: 2026-07
+    end: present
+    bullets:
+      - id: exp-workstudent-1
+        text: Analyzed operational workflows with business stakeholders and built AI-integrated tools end to end.
+      - id: exp-workstudent-2
+        text: Deployed Python services to the cloud and set up monitoring.
+
+projects:
+  - id: proj-job-scout
+    name: job-scout-agent
+    bullets:
+      - id: proj-job-scout-1
+        text: Built an LLM pipeline that discovers, scores and delivers job postings daily under a 5 EUR monthly budget.
+
+skills:
+  languages: [Python, TypeScript, SQL]
+  ai: [LLM APIs, RAG, prompt engineering, evaluation]
+  infra: [Docker, GitHub Actions, Supabase, Vercel]
