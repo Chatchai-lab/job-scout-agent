@@ -14,6 +14,14 @@ def main() -> None:
     pkg.add_argument("job_id")
 
     args = parser.parse_args()
+
+    if args.command == "seed-companies":
+        from job_scout.seed import seed_companies
+
+        count = seed_companies(args.path)
+        print(f"Seeded {count} companies into Supabase.")
+        return
+
     raise SystemExit(f"'{args.command}' is not implemented yet")
 
 
