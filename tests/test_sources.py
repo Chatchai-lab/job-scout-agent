@@ -130,4 +130,4 @@ def test_supported_ats_lists_all_registered_sources():
 
 
 def test_strip_html_collapses_tags():
-    assert _strip_html("<p>Hello <b>world</b></p>") == "Hello  world"
+    assert _strip_html("<p>Hello <b>world</b></p>") == "Hello world"

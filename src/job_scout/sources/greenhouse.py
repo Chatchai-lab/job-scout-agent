@@ -12,6 +12,7 @@ import httpx
 from job_scout.models import JobPosting
 
 _TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 _BASE_URLS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
@@ -20,7 +21,10 @@ _BASE_URLS = {
 
 
 def _strip_html(html: str) -> str:
-    return _TAG_RE.sub(" ", html or "").strip()
+    # Each tag becomes a space, which leaves doubled-up whitespace wherever a
+    # tag used to sit between two words (e.g. "Ship <b>production</b> AI."),
+    # so collapse runs of whitespace down to one space afterwards.
+    return _WHITESPACE_RE.sub(" ", _TAG_RE.sub(" ", html or "")).strip()
 
 
 def fetch(
