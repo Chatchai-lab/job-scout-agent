@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     score_threshold: int = 6
     instant_push_threshold: int = 9
     include_abroad: bool = False
+    eur_per_usd: float = 0.92
+    profile_yaml: str = ""
 
 
 @lru_cache
