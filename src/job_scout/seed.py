@@ -3,9 +3,9 @@
 from pathlib import Path
 
 import yaml
-from supabase import create_client
 
 from job_scout.config import get_settings
+from supabase import create_client
 
 
 def seed_companies(path: str) -> int:
