@@ -14,9 +14,6 @@ class Repo(Protocol):
     def unscored_jobs(self) -> list[dict[str, Any]]:
         """Recent jobs that have neither a score nor a prefilter drop."""
         ...
-    def _ids(self, table: str) -> set[str]:
-        return {r["job_id"] for r in self._all(lambda: self.db.table(table).select("job_id"))}
-
     def insert_drops(self, rows: list[dict[str, Any]]) -> None: ...
     def save_score(self, row: dict[str, Any]) -> None: ...
     def log_usage(self, row: dict[str, Any]) -> None: ...
@@ -45,6 +42,9 @@ class SupabaseRepo:
             if len(batch) < _PAGE:
                 return rows
             start += _PAGE
+
+    def _ids(self, table: str) -> set[str]:
+        return {r["job_id"] for r in self._all(lambda: self.db.table(table).select("job_id"))}
 
     def active_companies(self) -> list[dict[str, Any]]:
         return self._all(lambda: self.db.table("companies").select("*").eq("active", True))

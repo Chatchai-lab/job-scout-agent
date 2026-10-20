@@ -1,0 +1,31 @@
+name: Notify test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - name: Send test message
+        run: |
+          python - <<'PY'
+          from job_scout.config import get_settings
+          from job_scout.notify import TelegramNotifier
+
+          s = get_settings()
+          TelegramNotifier(s.telegram_bot_token, s.telegram_chat_id).send(
+              "✅ Job Scout ist verbunden.", job_id="test"
+          )
+          print("sent")
+          PY
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
