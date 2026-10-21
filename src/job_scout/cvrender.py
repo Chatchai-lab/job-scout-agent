@@ -122,7 +122,8 @@ def build_context(
         skill_rows.append(("Soft Skills", ", ".join(skills["soft"])))
     summary = (selection or {}).get("summary") or profile.get("summary", "")
     return {
-        "person": person, "headline": person.get("headline"),
+        "person": person,
+        "headline": (selection or {}).get("headline") or person.get("headline"),
         "contact_rows": _contact_rows(person), "photo": has_photo,
         "summary": " ".join(str(summary).split()), "experience": experience,
         "education": education, "projects": projects, "skill_rows": skill_rows,

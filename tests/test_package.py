@@ -1,10 +1,11 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
 from fakes import FakeNotifier, FakeRepo, ScriptedClient, posting, score
 
 from job_scout.config import Settings
-from job_scout.package import Draft, build_selection, create_package, run_package
+from job_scout.package import Draft, build_selection, create_package, file_slug, run_package
 
 PROFILE = """
 person:
@@ -60,6 +61,7 @@ INVENTED = LETTER.replace("ich bewerbe", "ich habe 7 Jahre Erfahrung, ich bewerb
 
 def _draft(**over):
     base = {
+        "headline": "Angehender Software Engineer",
         "summary": "Student mit Python-Erfahrung.",
         "picks": [
             {"entry_id": "exp-a", "bullet_ids": ["exp-a-2", "exp-a-1"]},
@@ -157,11 +159,14 @@ def _repo_with_job():
     return repo
 
 
-def _fake_build(tex, photo, workdir):
+def _fake_build(tex, photo, workdir, name="cv"):
     workdir.mkdir(parents=True, exist_ok=True)
-    assert "Max Mustermann" in tex and photo == b"jpegbytes"
-    pdf = workdir / "cv.pdf"
-    pdf.write_bytes(b"%PDF-1.4 test")
+    if name == "cv":
+        assert "Max Mustermann" in tex and photo == b"jpegbytes"
+    else:
+        assert "Bewerbung als" in tex and photo is None
+    pdf = workdir / f"{name}.pdf"
+    pdf.write_bytes(b"%PDF-1.4 " + name.encode())
     return pdf
 
 
@@ -169,15 +174,18 @@ def test_run_package_builds_stores_logs_and_delivers(tmp_path: Path):
     repo, notifier = _repo_with_job(), FakeNotifier()
     client = ScriptedClient([_draft()], [[]])
     assert run_package(repo, Settings(), client, notifier, "job-1",
-                       build_pdf=_fake_build, workdir=tmp_path) is True
-    stored = repo.uploads[("cv-assets", "packages/job-1.pdf")]
-    assert stored == (b"%PDF-1.4 test", "application/pdf")
+                       build_pdf=_fake_build, workdir=tmp_path, today=date(2026, 10, 21)) is True
+    assert repo.uploads[("cv-assets", "packages/job-1.pdf")] == (b"%PDF-1.4 cv", "application/pdf")
+    assert repo.uploads[("cv-assets", "packages/job-1-anschreiben.pdf")][0] == b"%PDF-1.4 letter"
     assert repo.packages["job-1"]["cv_pdf_path"] == "packages/job-1.pdf"
     assert [u["purpose"] for u in repo.usage] == ["package", "package"]
-    assert notifier.docs[0][0] == "cv.pdf" and "Firma" in notifier.docs[0][1]
+    # CV first, then the cover letter, each under the name it will be sent with
+    assert [name for name, _ in notifier.docs] == [
+        "Lebenslauf_Max_Mustermann.pdf", "Anschreiben_Firma_Max_Mustermann.pdf",
+    ]
+    assert "CV" in notifier.docs[0][1] and "Anschreiben" in notifier.docs[1][1]
     texts = [t for t, _ in notifier.sent]
-    assert texts[0].startswith("✉️") and texts[1].startswith("🔍")
-    assert len(texts) == 2  # no warnings
+    assert len(texts) == 1 and texts[0].startswith("🔍")  # gap analysis, no warnings
 
 
 def test_run_package_unknown_job_says_so(tmp_path: Path):
@@ -208,12 +216,13 @@ def test_storage_failure_still_delivers_and_warns(tmp_path: Path):
     assert notifier.docs and "job-1" not in repo.packages
     assert [u["purpose"] for u in repo.usage] == ["package", "package"]  # cost still logged
     assert "Speichern in Supabase fehlgeschlagen" in notifier.sent[-1][0]
+    assert len(notifier.docs) == 2  # CV and letter were delivered anyway
 
 
 def test_usage_is_logged_even_when_the_pdf_build_fails(tmp_path: Path):
     repo = _repo_with_job()
 
-    def broken_build(tex, photo, workdir):
+    def broken_build(tex, photo, workdir, name="cv"):
         raise RuntimeError("LaTeX build failed")
 
     client = ScriptedClient([_draft()], [[]])
@@ -221,3 +230,33 @@ def test_usage_is_logged_even_when_the_pdf_build_fails(tmp_path: Path):
         run_package(repo, Settings(), client, FakeNotifier(), "job-1",
                     build_pdf=broken_build, workdir=tmp_path)
     assert len(repo.usage) == 2 and repo.usage[0]["cost_usd"] > 0
+
+
+def test_headline_and_summary_are_tailored_to_the_job():
+    result, _ = _create([_draft(headline="Angehender Forward Deployed Engineer",
+                                summary="Angehender Forward Deployed Engineer mit Python.")],
+                        [[]])
+    assert result.selection["headline"] == "Angehender Forward Deployed Engineer"
+    assert result.selection["summary"].startswith("Angehender Forward Deployed Engineer")
+
+
+def test_flagged_or_unsupported_headline_falls_back_to_the_profile_headline():
+    flagged, _ = _create([_draft()], [[{"target": "headline", "problem": "unbelegt"}]])
+    assert flagged.selection["headline"] is None
+    invented, _ = _create([_draft(headline="Angehender Kubernetes Engineer")], [[]])
+    assert invented.selection["headline"] is None
+
+
+def test_pinned_projects_are_always_included():
+    import yaml
+    profile = yaml.safe_load(PROFILE)
+    profile["projects"][1]["pinned"] = True  # proj-y, which the draft did not pick
+    sel = build_selection(Draft(**_draft()), profile)
+    assert sel["bullets"]["proj-y"] == ["proj-y-1"]
+    assert set(sel["projects_chosen"]) == {"proj-x", "proj-y"}
+
+
+def test_file_slug_makes_safe_ascii_names():
+    assert file_slug("Chatchai Sirichot") == "Chatchai_Sirichot"
+    assert file_slug("Müller & Söhne GmbH") == "Muller_Sohne_GmbH"
+    assert file_slug("???") == "Datei"

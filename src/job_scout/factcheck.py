@@ -91,9 +91,11 @@ Melde einen Fehler, wenn ein Text Folgendes enthält, das das Profil nicht beleg
 - Berufserfahrung, Jahre, Zahlen, Ergebnisse, Verantwortung oder Kunden, die nicht im Profil stehen
 - Technologien, Tools oder Zertifikate, die nicht im Profil stehen
 - Aufgaben, die über die Stichpunkte im Profil hinausgehen (Übertreibung zählt)
-Nicht gemeldet wird: andere Wortwahl, Umstellung der Reihenfolge, Verweise auf die ausgeschriebene \
-Stelle und die Firma, allgemeine Motivation, Start im März 2027.
-Gib bei "target" an: summary, cover_letter oder bullet:<id>. Wenn alles belegt ist: leere Liste.
+Nicht gemeldet wird: die Zielrolle in "headline" und "summary" ("Angehender <Rolle der Stelle>" \
+ist ein Berufsziel, keine behauptete Erfahrung), andere Wortwahl, Umstellung der Reihenfolge, \
+Verweise auf die ausgeschriebene Stelle und die Firma, allgemeine Motivation, Start im März 2027.
+Gib bei "target" an: headline, summary, cover_letter oder bullet:<id>. Wenn alles belegt ist: \
+leere Liste.
 Antworte ausschließlich über das Tool submit_factcheck."""
 
 
@@ -102,9 +104,16 @@ def build_check_system(profile_text: str) -> str:
 
 
 def build_check_user(
-    *, summary: str, cover_letter: str, rewrites: dict[str, tuple[str, str]], job_text: str
+    *,
+    summary: str,
+    cover_letter: str,
+    rewrites: dict[str, tuple[str, str]],
+    job_text: str,
+    headline: str = "",
 ) -> str:
     parts = ["## Stellenanzeige (nur für Verweise auf Stelle und Firma)\n" + job_text[:3000]]
+    if headline:
+        parts.append("## headline\n" + headline)
     parts.append("## summary\n" + summary)
     for bullet_id, (original, new) in rewrites.items():
         parts.append(f"## bullet:{bullet_id}\nOriginal: {original}\nNeu: {new}")

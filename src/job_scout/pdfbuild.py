@@ -21,16 +21,17 @@ def error_lines(output: str) -> str:
     return "\n".join(lines[:6]) or "no error line found"
 
 
-def build_pdf(tex: str, photo: bytes | None, workdir: Path) -> Path:
+def build_pdf(tex: str, photo: bytes | None, workdir: Path, name: str = "cv") -> Path:
+    """Compile `<name>.tex` in workdir (photo, if any, as photo.jpg) and return `<name>.pdf`."""
     workdir.mkdir(parents=True, exist_ok=True)
-    (workdir / "cv.tex").write_text(tex, encoding="utf-8")
+    (workdir / f"{name}.tex").write_text(tex, encoding="utf-8")
     if photo:
         (workdir / "photo.jpg").write_bytes(photo)
-    for cmd in _engine_commands("cv.tex"):
+    for cmd in _engine_commands(f"{name}.tex"):
         run = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=240)
         if run.returncode != 0:
             raise RuntimeError("LaTeX build failed: " + error_lines(run.stdout + run.stderr))
-    pdf = workdir / "cv.pdf"
+    pdf = workdir / f"{name}.pdf"
     if not pdf.exists():
         raise RuntimeError("LaTeX build produced no PDF")
     return pdf

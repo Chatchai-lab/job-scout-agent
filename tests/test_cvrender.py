@@ -100,3 +100,10 @@ def test_optional_person_fields_may_be_missing():
         minimal["person"].pop(key)
     tex = render_cv(minimal)
     assert "Max Mustermann" in tex and "Adresse" not in tex
+
+
+def test_selection_headline_overrides_the_profile_headline():
+    tex = render_cv(PROFILE, {"headline": "Angehender Forward Deployed Engineer"})
+    assert "Angehender Forward Deployed Engineer" in tex
+    assert "Software \\& AI" not in tex
+    assert "Software \\& AI" in render_cv(PROFILE, {"headline": None})

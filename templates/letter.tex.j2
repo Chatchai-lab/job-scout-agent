@@ -1,0 +1,53 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,left=2.4cm,right=2.4cm,top=2cm,bottom=2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{parskip}
+
+\hypersetup{
+    colorlinks=true,
+    urlcolor=blue!60!black,
+    linkcolor=black
+}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7em}
+
+\definecolor{main}{HTML}{1F4E79}
+\definecolor{dark}{HTML}{222222}
+\definecolor{light}{HTML}{666666}
+
+\begin{document}
+
+{\Huge\bfseries\color{dark} \VAR{ person.name | e }}\\[2pt]
+{\color{main}\rule{\linewidth}{0.8pt}}\\[2pt]
+{\small\color{light} \VAR{ contact_line }}
+
+\vspace{1.0cm}
+
+\begin{flushright}
+\VAR{ date | e }
+\end{flushright}
+
+\vspace{0.4cm}
+
+\textbf{\VAR{ company | e }}\BLOCK{ if place }\\
+\VAR{ place | e }\BLOCK{ endif }
+
+\vspace{0.8cm}
+
+{\large\bfseries\color{main} Bewerbung als \VAR{ job_title | e }}
+
+\vspace{0.3cm}
+
+\BLOCK{ for paragraph in paragraphs }
+\VAR{ paragraph }
+
+\BLOCK{ endfor }
+\end{document}

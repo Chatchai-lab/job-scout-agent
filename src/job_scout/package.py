@@ -6,10 +6,15 @@ cover letter is regenerated once. The profile stays the only source of facts.
 """
 
 import html
+import re
+import shutil
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 from pydantic import BaseModel, Field
@@ -17,6 +22,7 @@ from pydantic import BaseModel, Field
 from job_scout.config import Settings
 from job_scout.cvrender import render_cv
 from job_scout.factcheck import deterministic_problems, llm_check, profile_corpus
+from job_scout.letterrender import render_letter
 from job_scout.pricing import Usage, cost_usd
 from job_scout.toolcall import call_tool
 
@@ -42,6 +48,7 @@ class Rewrite(BaseModel):
 
 
 class Draft(BaseModel):
+    headline: str
     summary: str
     picks: list[BulletPick]
     rewrites: list[Rewrite] = Field(default_factory=list)
@@ -55,6 +62,10 @@ DRAFT_TOOL: dict[str, Any] = {
     "input_schema": {
         "type": "object",
         "properties": {
+            "headline": {
+                "type": "string",
+                "description": "CV tagline: 'Angehender <role of the job>', max 6 words.",
+            },
             "summary": {"type": "string", "description": "CV profile text, 2-3 sentences."},
             "picks": {
                 "type": "array",
@@ -94,7 +105,7 @@ DRAFT_TOOL: dict[str, Any] = {
                 },
             },
         },
-        "required": ["summary", "picks", "rewrites", "cover_letter", "gaps"],
+        "required": ["headline", "summary", "picks", "rewrites", "cover_letter", "gaps"],
         "additionalProperties": False,
     },
 }
@@ -111,8 +122,15 @@ und Betonung anpassen, nie den Inhalt. Begriffe aus der Anzeige nur verwenden, w
 Originalstichpunkt dasselbe meint.
 - Jede Station (experience-ID) behält mindestens einen Stichpunkt, die relevantesten zuerst. \
 Wenig relevante Stichpunkte darfst du weglassen.
-- Projekte: wähle die 2 bis 3 passendsten (Projekt-ID mit ihren Stichpunkten in "picks").
-- summary: 2 bis 3 Sätze CV-Profil, passend zur Stelle, nur belegte Fakten.
+- Projekte: Projekte mit "pinned: true" im Profil gehören immer in "picks". Dazu wählst du 1 bis 2 \
+weitere passende Projekte. Nimm je Projekt die Stichpunkte, die zur Stelle passen.
+- headline: Die Überschrift unter dem Namen. "Angehender " plus die Rollenbezeichnung der Stelle, \
+ohne Firma, Ort, (m/w/d) und Seniorität, höchstens 6 Wörter, z. B. "Angehender Forward Deployed \
+Engineer". Das ist die Zielrolle, keine behauptete Erfahrung.
+- summary: 2 bis 3 Sätze. Der erste Satz beginnt mit derselben Rollenbezeichnung wie die headline \
+und nennt Studiengang und Hochschule aus dem Profil ("Angehender … (B.Sc. …, …)"). Danach 1 bis 2 \
+Sätze mit den für DIESE Stelle relevantesten belegten Stärken (Projekte, Praxis, Technik). Nur \
+belegte Fakten.
 - cover_letter: Deutsch, formell, 180 bis 230 Wörter. Beginnt mit \
 "Sehr geehrte Damen und Herren,", endet mit "Mit freundlichen Grüßen" und dem Namen aus dem \
 Profil. Nenne Firma und Stelle, 2 bis 3 belegte Gründe für die Passung, den frühesten Start \
@@ -181,6 +199,9 @@ def build_selection(draft: Draft, profile: dict[str, Any]) -> dict[str, Any]:
         ids = list(dict.fromkeys(i for i in pick.bullet_ids if i in valid))
         if ids:
             chosen[pick.entry_id] = ids
+    for entry in profile.get("projects", []):
+        if entry.get("pinned") and entry["id"] not in chosen:
+            chosen[entry["id"]] = [b["id"] for b in entry.get("bullets", [])]
     shown = {i for ids in chosen.values() for i in ids}
     rewrites = {
         r.bullet_id: " ".join(r.text.split())
@@ -190,6 +211,7 @@ def build_selection(draft: Draft, profile: dict[str, Any]) -> dict[str, Any]:
     }
     project_ids = {p["id"] for p in profile.get("projects", [])}
     return {
+        "headline": " ".join(draft.headline.split()) or None,
         "summary": " ".join(draft.summary.split()) or None,
         "bullets": chosen,
         "rewrites": rewrites,
@@ -231,12 +253,16 @@ def create_package(
         summary_bad = bool(selection["summary"]) and bool(
             deterministic_problems(selection["summary"], corpus)
         )
+        headline_bad = bool(selection["headline"]) and bool(
+            deterministic_problems(selection["headline"], corpus, posting)
+        )
         letter_problems = deterministic_problems(draft.cover_letter, corpus, posting)
 
         issues, u2 = llm_check(
             client,
             settings.model_package,
             profile_text,
+            headline=selection["headline"] or "",
             summary=selection["summary"] or profile.get("summary", ""),
             cover_letter=draft.cover_letter,
             rewrites={i: (original[i], t) for i, t in rewrites.items()},
@@ -249,6 +275,8 @@ def create_package(
                 bad_rewrites.add(target.split(":", 1)[1])
             elif target == "summary":
                 summary_bad = True
+            elif target == "headline":
+                headline_bad = True
             elif target == "cover_letter":
                 letter_problems.append(issue["problem"])
 
@@ -256,6 +284,8 @@ def create_package(
             rewrites.pop(bullet_id, None)  # fall back to the profile wording
         if summary_bad:
             selection["summary"] = None  # renderer then uses the profile summary
+        if headline_bad:
+            selection["headline"] = None  # renderer then uses the profile headline
         if letter_problems and attempt == 0:
             feedback = letter_problems
             continue
@@ -279,7 +309,26 @@ class PackageNotifier(Protocol):
     def send_document(self, path: Path, caption: str | None = None) -> None: ...
 
 
-BuildPdf = Callable[[str, bytes | None, Path], Path]
+BuildPdf = Callable[..., Path]  # (tex, photo, workdir, name="cv") -> pdf path
+
+
+def file_slug(text: str) -> str:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^A-Za-z0-9]+", "_", ascii_text).strip("_") or "Datei"
+
+
+def _berlin_today() -> date:
+    try:
+        return datetime.now(ZoneInfo("Europe/Berlin")).date()
+    except ZoneInfoNotFoundError:
+        return date.today()
+
+
+def _named_copy(source: Path, name: str) -> Path:
+    """The PDF under the file name the user will later send to the employer."""
+    target = source.with_name(name)
+    shutil.copyfile(source, target)
+    return target
 
 
 def format_gaps(gaps: list[dict[str, str]]) -> str:
@@ -288,10 +337,6 @@ def format_gaps(gaps: list[dict[str, str]]) -> str:
         icon = _STATUS_ICON.get(g["status"], "•")
         lines.append(f"{icon} <b>{html.escape(g['requirement'])}</b>\n{html.escape(g['note'])}")
     return "\n".join(lines)[:4000]
-
-
-def format_letter(letter: str) -> str:
-    return ("✉️ <b>Anschreiben-Entwurf</b>\n\n" + html.escape(letter))[:4000]
 
 
 def run_package(
@@ -303,6 +348,7 @@ def run_package(
     *,
     build_pdf: BuildPdf,
     workdir: Path,
+    today: date | None = None,
 ) -> bool:
     """Build and deliver the package for one job. Returns False if the job is unknown."""
     row = repo.scored_job(job_id)
@@ -338,20 +384,30 @@ def run_package(
             result.warnings.append("Foto konnte nicht geladen werden, CV ohne Foto")
 
     tex = render_cv(profile, result.selection, has_photo=photo is not None)
-    pdf_path = build_pdf(tex, photo, workdir)
+    cv_pdf = build_pdf(tex, photo, workdir)
+    letter_tex = render_letter(profile, result.cover_letter, job, today or _berlin_today())
+    letter_pdf = build_pdf(letter_tex, None, workdir, "letter")
 
-    notifier.send_document(
-        pdf_path, caption=f"📦 CV für {job['company_name']} – {job['title']}"[:1000]
+    person = file_slug(profile["person"]["name"])
+    cv_file = _named_copy(cv_pdf, f"Lebenslauf_{person}.pdf")
+    letter_file = _named_copy(
+        letter_pdf, f"Anschreiben_{file_slug(job['company_name'])}_{person}.pdf"
     )
-    notifier.send(format_letter(result.cover_letter))
+    label = f"{job['company_name']} – {job['title']}"
+    notifier.send_document(cv_file, caption=f"📦 CV für {label}"[:1000])
+    notifier.send_document(letter_file, caption=f"✉️ Anschreiben für {label}"[:1000])
     notifier.send(format_gaps(result.gaps))
 
     # Persisting comes after delivery: the user gets the package even if storage fails.
-    stored_path = f"packages/{job_id}.pdf"
+    stored_cv = f"packages/{job_id}.pdf"
     try:
-        repo.upload_asset(PHOTO_BUCKET, stored_path, pdf_path.read_bytes(), "application/pdf")
+        repo.upload_asset(PHOTO_BUCKET, stored_cv, cv_pdf.read_bytes(), "application/pdf")
+        repo.upload_asset(
+            PHOTO_BUCKET, f"packages/{job_id}-anschreiben.pdf",
+            letter_pdf.read_bytes(), "application/pdf",
+        )
         repo.save_package(
-            job_id, cv_pdf_path=stored_path, cover_letter=result.cover_letter, gaps=result.gaps
+            job_id, cv_pdf_path=stored_cv, cover_letter=result.cover_letter, gaps=result.gaps
         )
     except Exception as exc:
         result.warnings.append(f"Speichern in Supabase fehlgeschlagen ({type(exc).__name__})")
