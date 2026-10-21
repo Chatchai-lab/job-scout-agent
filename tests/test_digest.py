@@ -45,9 +45,16 @@ def test_empty_digest_still_says_so():
 
 
 def _job(i):
-    p = posting(ext=str(i), title=f"Role {i}")
+    p = posting(ext=str(i), title=f"Software Engineer {i}")
     return {
         "source": p.source, "external_id": p.external_id, "company_name": p.company_name,
         "title": p.title, "url": p.url, "location": p.location, "remote": False,
         "dedup_key": p.dedup_key,
     }
+
+
+def test_digest_skips_jobs_the_current_prefilter_would_drop():
+    s = Settings()
+    ok = {**_row(8, 8), "jobs": {**_job(1), "location": "Munich, Germany"}}
+    stale = {**_row(9, 9), "jobs": {**_job(2), "location": "Singapore", "remote": True}}
+    assert select_digest([stale, ok], s) == [ok]

@@ -48,18 +48,23 @@ class SupabaseRepo:
                     raise
                 time.sleep(2**attempt)
 
-    def _all(self, query_fn: Any) -> list[dict[str, Any]]:
+    def _all(self, query_fn: Any, key: str = "id") -> list[dict[str, Any]]:
+        """Read every row with keyset paging: stable under ties and server-side row caps."""
         rows: list[dict[str, Any]] = []
-        start = 0
+        last = None
         while True:
-            batch = self._run(query_fn().range(start, start + _PAGE - 1)).data
+            query = query_fn()
+            if last is not None:
+                query = query.gt(key, last)
+            batch = self._run(query.order(key).limit(_PAGE)).data
             rows.extend(batch)
             if len(batch) < _PAGE:
                 return rows
-            start += _PAGE
+            last = batch[-1][key]
 
     def _ids(self, table: str) -> set[str]:
-        return {r["job_id"] for r in self._all(lambda: self.db.table(table).select("job_id"))}
+        rows = self._all(lambda: self.db.table(table).select("job_id"), key="job_id")
+        return {r["job_id"] for r in rows}
 
     def active_companies(self) -> list[dict[str, Any]]:
         return self._all(lambda: self.db.table("companies").select("*").eq("active", True))
@@ -69,7 +74,7 @@ class SupabaseRepo:
         self._run(query)
 
     def known_jobs(self) -> tuple[set[tuple[str, str]], set[str]]:
-        rows = self._all(lambda: self.db.table("jobs").select("source,external_id,dedup_key"))
+        rows = self._all(lambda: self.db.table("jobs").select("id,source,external_id,dedup_key"))
         return (
             {(r["source"], r["external_id"]) for r in rows},
             {r["dedup_key"] for r in rows},
@@ -113,7 +118,8 @@ class SupabaseRepo:
 
     def unnotified(self) -> list[dict[str, Any]]:
         rows = self._all(
-            lambda: self.db.table("scores").select("*, jobs(*)").is_("notified_at", "null")
+            lambda: self.db.table("scores").select("*, jobs(*)").is_("notified_at", "null"),
+            key="job_id",
         )
         return [r for r in rows if r.get("jobs")]
 

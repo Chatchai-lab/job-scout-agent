@@ -54,7 +54,7 @@ def _job_row(job: JobPosting, company_id: str | None) -> dict[str, Any]:
     }
 
 
-def _posting_from_row(row: dict[str, Any]) -> JobPosting:
+def posting_from_row(row: dict[str, Any]) -> JobPosting:
     return JobPosting(
         source=row["source"],
         external_id=row["external_id"],
@@ -118,7 +118,7 @@ def score_pending(
     drops: list[dict[str, Any]] = []
 
     for row in repo.unscored_jobs():
-        reason = prefilter(_posting_from_row(row), include_abroad=settings.include_abroad)
+        reason = prefilter(posting_from_row(row), include_abroad=settings.include_abroad)
         if reason:
             drops.append({"job_id": row["id"], "reason": str(reason)})
             continue
@@ -126,7 +126,7 @@ def score_pending(
             stats.budget_stopped = True
             break
         try:
-            result, usage = score_fn(system, _posting_from_row(row))
+            result, usage = score_fn(system, posting_from_row(row))
         except Exception as exc:
             stats.score_errors += 1
             stats.errors.append(f"score {row['title']}: {exc}")

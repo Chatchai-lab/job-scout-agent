@@ -9,6 +9,8 @@ from job_scout.repo import SupabaseRepo
 
 
 class _Query:
+    """Just enough of the postgrest query builder: gt, order, limit, range."""
+
     def __init__(self, rows: list[dict[str, Any]]):
         self._rows = rows
 
@@ -18,8 +20,14 @@ class _Query:
     def gte(self, *_a: Any, **_k: Any) -> "_Query":
         return self
 
-    def range(self, start: int, end: int) -> "_Query":
-        return _Query(self._rows[start : end + 1])
+    def gt(self, column: str, value: Any) -> "_Query":
+        return _Query([r for r in self._rows if r[column] > value])
+
+    def order(self, column: str) -> "_Query":
+        return _Query(sorted(self._rows, key=lambda r: r[column]))
+
+    def limit(self, n: int) -> "_Query":
+        return _Query(self._rows[:n])
 
     def execute(self) -> Any:
         return type("R", (), {"data": self._rows})()
@@ -82,3 +90,9 @@ def test_persistent_network_errors_are_raised(monkeypatch):
     monkeypatch.setattr("job_scout.repo.time.sleep", lambda _s: None)
     with pytest.raises(httpx.RemoteProtocolError):
         SupabaseRepo(_Client())._run(_Flaky(failures=99))
+
+
+def test_all_rows_are_read_across_pages():
+    rows = [{"id": f"{i:05d}"} for i in range(2500)]
+    client = _Client({"jobs": rows})
+    assert len(SupabaseRepo(client)._all(lambda: client.table("jobs"))) == 2500
