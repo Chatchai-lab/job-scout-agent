@@ -316,22 +316,7 @@ def run_package(
     job = row["jobs"]
 
     result = create_package(client, settings, profile_text, job)
-
-    photo: bytes | None = None
-    photo_name = profile.get("person", {}).get("photo")
-    if photo_name:
-        try:
-            photo = repo.download_asset(PHOTO_BUCKET, photo_name)
-        except Exception:  # the CV still builds without a photo
-            result.warnings.append("Foto konnte nicht geladen werden, CV ohne Foto")
-
-    tex = render_cv(profile, result.selection, has_photo=photo is not None)
-    pdf_path = build_pdf(tex, photo, workdir)
-    stored_path = f"packages/{job_id}.pdf"
-    repo.upload_asset(PHOTO_BUCKET, stored_path, pdf_path.read_bytes(), "application/pdf")
-    repo.save_package(
-        job_id, cv_pdf_path=stored_path, cover_letter=result.cover_letter, gaps=result.gaps
-    )
+    # Log the spend right away: a later failure must not hide what the API calls cost.
     for model, u in result.usage:
         repo.log_usage(
             {
@@ -344,11 +329,32 @@ def run_package(
             }
         )
 
+    photo: bytes | None = None
+    photo_name = profile.get("person", {}).get("photo")
+    if photo_name:
+        try:
+            photo = repo.download_asset(PHOTO_BUCKET, photo_name)
+        except Exception:  # the CV still builds without a photo
+            result.warnings.append("Foto konnte nicht geladen werden, CV ohne Foto")
+
+    tex = render_cv(profile, result.selection, has_photo=photo is not None)
+    pdf_path = build_pdf(tex, photo, workdir)
+
     notifier.send_document(
         pdf_path, caption=f"📦 CV für {job['company_name']} – {job['title']}"[:1000]
     )
     notifier.send(format_letter(result.cover_letter))
     notifier.send(format_gaps(result.gaps))
+
+    # Persisting comes after delivery: the user gets the package even if storage fails.
+    stored_path = f"packages/{job_id}.pdf"
+    try:
+        repo.upload_asset(PHOTO_BUCKET, stored_path, pdf_path.read_bytes(), "application/pdf")
+        repo.save_package(
+            job_id, cv_pdf_path=stored_path, cover_letter=result.cover_letter, gaps=result.gaps
+        )
+    except Exception as exc:
+        result.warnings.append(f"Speichern in Supabase fehlgeschlagen ({type(exc).__name__})")
     if result.warnings:
         lines = "\n".join(html.escape(w) for w in result.warnings)
         notifier.send("⚠️ <b>Bitte prüfen</b>\n" + lines)

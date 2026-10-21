@@ -193,3 +193,31 @@ def test_run_package_without_profile_row_fails_loudly(tmp_path: Path):
     with pytest.raises(RuntimeError):
         run_package(repo, Settings(), ScriptedClient([], []), FakeNotifier(), "job-1",
                     build_pdf=_fake_build, workdir=tmp_path)
+
+
+def test_storage_failure_still_delivers_and_warns(tmp_path: Path):
+    repo, notifier = _repo_with_job(), FakeNotifier()
+
+    def broken_upload(*_args):
+        raise RuntimeError("storage down")
+
+    repo.upload_asset = broken_upload
+    client = ScriptedClient([_draft()], [[]])
+    assert run_package(repo, Settings(), client, notifier, "job-1",
+                       build_pdf=_fake_build, workdir=tmp_path) is True
+    assert notifier.docs and "job-1" not in repo.packages
+    assert [u["purpose"] for u in repo.usage] == ["package", "package"]  # cost still logged
+    assert "Speichern in Supabase fehlgeschlagen" in notifier.sent[-1][0]
+
+
+def test_usage_is_logged_even_when_the_pdf_build_fails(tmp_path: Path):
+    repo = _repo_with_job()
+
+    def broken_build(tex, photo, workdir):
+        raise RuntimeError("LaTeX build failed")
+
+    client = ScriptedClient([_draft()], [[]])
+    with pytest.raises(RuntimeError):
+        run_package(repo, Settings(), client, FakeNotifier(), "job-1",
+                    build_pdf=broken_build, workdir=tmp_path)
+    assert len(repo.usage) == 2 and repo.usage[0]["cost_usd"] > 0
