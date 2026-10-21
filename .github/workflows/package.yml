@@ -1,0 +1,40 @@
+name: Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Job id (uuid) to build the application package for
+        type: string
+        required: true
+
+concurrency:
+  group: package-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install LaTeX
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended texlive-lang-german lmodern
+      - run: pip install -e .
+      - name: Build and send package
+        run: job-scout package "$JOB_ID"
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

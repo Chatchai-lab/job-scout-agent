@@ -20,6 +20,9 @@ class _Query:
     def gte(self, *_a: Any, **_k: Any) -> "_Query":
         return self
 
+    def eq(self, column: str, value: Any) -> "_Query":
+        return _Query([r for r in self._rows if r.get(column) == value])
+
     def gt(self, column: str, value: Any) -> "_Query":
         return _Query([r for r in self._rows if r[column] > value])
 
@@ -37,6 +40,7 @@ class _Client:
     def __init__(self, tables: dict[str, list[dict[str, Any]]] | None = None):
         self._tables = tables or {}
         self.upserts: list[tuple[str, int]] = []
+        self.payloads: list[tuple[str, Any]] = []
 
     def table(self, name: str) -> _Query:
         query = _Query(self._tables.get(name, []))
@@ -45,6 +49,7 @@ class _Client:
 
     def _record(self, name: str, rows: list[dict[str, Any]]) -> "_Query":
         self.upserts.append((name, len(rows)))
+        self.payloads.append((name, rows))
         return _Query([])
 
 
@@ -96,3 +101,19 @@ def test_all_rows_are_read_across_pages():
     rows = [{"id": f"{i:05d}"} for i in range(2500)]
     client = _Client({"jobs": rows})
     assert len(SupabaseRepo(client)._all(lambda: client.table("jobs"))) == 2500
+
+
+def test_private_profile_returns_the_yaml_text():
+    client = _Client({"profile_private": [{"id": "main", "yaml": "person: {}"}]})
+    assert SupabaseRepo(client).private_profile() == "person: {}"
+    assert SupabaseRepo(_Client()).private_profile() is None
+
+
+def test_save_package_sets_status_paket_but_never_moves_back():
+    new = _Client({"applications": [{"job_id": "j1", "status": "gemerkt"}]})
+    SupabaseRepo(new).save_package("j1", cv_pdf_path="p.pdf", cover_letter="x", gaps=[])
+    assert new.payloads[-1][1]["status"] == "paket"
+
+    advanced = _Client({"applications": [{"job_id": "j2", "status": "beworben"}]})
+    SupabaseRepo(advanced).save_package("j2", cv_pdf_path="p.pdf", cover_letter="x", gaps=[])
+    assert advanced.payloads[-1][1]["status"] == "beworben"

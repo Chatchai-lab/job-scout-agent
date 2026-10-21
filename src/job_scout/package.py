@@ -1,0 +1,360 @@
+"""Application package: tailored CV selection, cover letter draft and gap analysis.
+
+Flow: Sonnet drafts (forced tool call) -> selection is validated against the profile ->
+deterministic and LLM fact check -> flagged parts fall back to the profile wording; a flagged
+cover letter is regenerated once. The profile stays the only source of facts.
+"""
+
+import html
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Literal, Protocol
+
+import yaml
+from pydantic import BaseModel, Field
+
+from job_scout.config import Settings
+from job_scout.cvrender import render_cv
+from job_scout.factcheck import deterministic_problems, llm_check, profile_corpus
+from job_scout.pricing import Usage, cost_usd
+from job_scout.scoring import usage_from
+
+MAX_DESCRIPTION_CHARS = 6000
+PHOTO_BUCKET = "cv-assets"
+_STATUS_ICON = {"erfüllt": "✅", "teilweise": "🟡", "fehlt": "❌"}
+
+
+class GapItem(BaseModel):
+    requirement: str
+    status: Literal["erfüllt", "teilweise", "fehlt"]
+    note: str
+
+
+class BulletPick(BaseModel):
+    entry_id: str
+    bullet_ids: list[str]
+
+
+class Rewrite(BaseModel):
+    bullet_id: str
+    text: str
+
+
+class Draft(BaseModel):
+    summary: str
+    picks: list[BulletPick]
+    rewrites: list[Rewrite] = Field(default_factory=list)
+    cover_letter: str
+    gaps: list[GapItem]
+
+
+DRAFT_TOOL: dict[str, Any] = {
+    "name": "submit_package",
+    "description": "Submit the tailored CV selection, cover letter and gap analysis.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "description": "CV profile text, 2-3 sentences."},
+            "picks": {
+                "type": "array",
+                "description": "Per experience/project id: bullet ids in display order.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "entry_id": {"type": "string"},
+                        "bullet_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["entry_id", "bullet_ids"],
+                },
+            },
+            "rewrites": {
+                "type": "array",
+                "description": "Reworded bullets (same facts, other emphasis).",
+                "items": {
+                    "type": "object",
+                    "properties": {"bullet_id": {"type": "string"}, "text": {"type": "string"}},
+                    "required": ["bullet_id", "text"],
+                },
+            },
+            "cover_letter": {"type": "string"},
+            "gaps": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "requirement": {"type": "string"},
+                        "status": {"type": "string", "enum": ["erfüllt", "teilweise", "fehlt"]},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["requirement", "status", "note"],
+                },
+            },
+        },
+        "required": ["summary", "picks", "cover_letter", "gaps"],
+    },
+}
+
+INSTRUCTIONS = """\
+Du erstellst Bewerbungsunterlagen für den Kandidaten im Profil unten. Das Profil ist die EINZIGE \
+Faktenquelle.
+
+Harte Regeln:
+- Erfinde nichts: keine Erfahrungen, Zahlen, Technologien, Firmen, Ergebnisse, Titel oder \
+Zertifikate, die nicht im Profil stehen.
+- Wähle und ordne nur vorhandene Stichpunkte (über ihre IDs). Mit "rewrites" darfst du Wortwahl \
+und Betonung anpassen, nie den Inhalt. Begriffe aus der Anzeige nur verwenden, wenn der \
+Originalstichpunkt dasselbe meint.
+- Jede Station (experience-ID) behält mindestens einen Stichpunkt, die relevantesten zuerst. \
+Wenig relevante Stichpunkte darfst du weglassen.
+- Projekte: wähle die 2 bis 3 passendsten (Projekt-ID mit ihren Stichpunkten in "picks").
+- summary: 2 bis 3 Sätze CV-Profil, passend zur Stelle, nur belegte Fakten.
+- cover_letter: Deutsch, formell, 180 bis 230 Wörter. Beginnt mit \
+"Sehr geehrte Damen und Herren,", endet mit "Mit freundlichen Grüßen" und dem Namen aus dem \
+Profil. Nenne Firma und Stelle, 2 bis 3 belegte Gründe für die Passung, den frühesten Start \
+(März 2027) und den Bachelor-Abschluss im Februar 2027. Sei ehrlich bei Lücken (z. B. wenig \
+Berufserfahrung), ohne zu übertreiben. Keine Platzhalter wie [Name].
+- gaps: 4 bis 8 zentrale Anforderungen der Anzeige, je mit Status (erfüllt, teilweise, fehlt) und \
+kurzer Begründung mit Bezug auf das Profil.
+Antworte ausschließlich über das Tool submit_package."""
+
+
+def build_draft_system(profile_text: str) -> str:
+    return INSTRUCTIONS + "\n\n## Profil (einzige Faktenquelle)\n" + profile_text
+
+
+def job_text(job: dict[str, Any]) -> str:
+    description = (job.get("description") or "")[:MAX_DESCRIPTION_CHARS]
+    return (
+        f"Firma: {job['company_name']}\nTitel: {job['title']}\n"
+        f"Ort: {job.get('location') or 'unbekannt'}\nLink: {job['url']}\n\n"
+        f"Beschreibung:\n{description or '(keine)'}"
+    )
+
+
+def build_draft_user(job: dict[str, Any], feedback: list[str] | None) -> str:
+    text = job_text(job)
+    if feedback:
+        text += (
+            "\n\nDie vorige Fassung des Anschreibens enthielt unbelegte Angaben: "
+            + "; ".join(feedback)
+            + ". Schreibe es neu und lasse diese Angaben weg."
+        )
+    return text
+
+
+def draft_package(
+    client: Any, model: str, profile_text: str, job: dict[str, Any],
+    feedback: list[str] | None = None,
+) -> tuple[Draft, Usage]:
+    response = client.messages.create(
+        model=model,
+        max_tokens=4000,
+        system=[
+            {
+                "type": "text",
+                "text": build_draft_system(profile_text),
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        tools=[DRAFT_TOOL],
+        tool_choice={"type": "tool", "name": "submit_package"},
+        messages=[{"role": "user", "content": build_draft_user(job, feedback)}],
+    )
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "submit_package":
+            return Draft(**block.input), usage_from(response)
+    raise ValueError("model did not call submit_package")
+
+
+def _entries(profile: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
+    """experience/project id -> its bullets, straight from the profile."""
+    found: dict[str, list[dict[str, str]]] = {}
+    for section in ("experience", "projects"):
+        for entry in profile.get(section, []):
+            found[entry["id"]] = entry.get("bullets", [])
+    return found
+
+
+def build_selection(draft: Draft, profile: dict[str, Any]) -> dict[str, Any]:
+    """Turn a draft into a renderer selection; unknown ids are dropped, never invented."""
+    entries = _entries(profile)
+    original = {b["id"]: b["text"] for bullets in entries.values() for b in bullets}
+    chosen: dict[str, list[str]] = {}
+    for pick in draft.picks:
+        valid = {b["id"] for b in entries.get(pick.entry_id, [])}
+        ids = list(dict.fromkeys(i for i in pick.bullet_ids if i in valid))
+        if ids:
+            chosen[pick.entry_id] = ids
+    shown = {i for ids in chosen.values() for i in ids}
+    rewrites = {
+        r.bullet_id: " ".join(r.text.split())
+        for r in draft.rewrites
+        if r.bullet_id in shown and r.bullet_id in original and r.text.strip()
+        and " ".join(r.text.split()) != original[r.bullet_id]
+    }
+    project_ids = {p["id"] for p in profile.get("projects", [])}
+    return {
+        "summary": " ".join(draft.summary.split()) or None,
+        "bullets": chosen,
+        "rewrites": rewrites,
+        "projects_chosen": [e for e in chosen if e in project_ids],
+    }
+
+
+@dataclass
+class PackageResult:
+    selection: dict[str, Any]
+    cover_letter: str
+    gaps: list[dict[str, str]]
+    warnings: list[str] = field(default_factory=list)
+    usage: list[tuple[str, Usage]] = field(default_factory=list)
+
+    def cost_usd(self) -> float:
+        return sum(cost_usd(model, u) for model, u in self.usage)
+
+
+def create_package(
+    client: Any, settings: Settings, profile_text: str, job: dict[str, Any]
+) -> PackageResult:
+    profile = yaml.safe_load(profile_text)
+    corpus = profile_corpus(profile)
+    posting = job_text(job)
+    original = {
+        b["id"]: b["text"] for bullets in _entries(profile).values() for b in bullets
+    }
+    usage: list[tuple[str, Usage]] = []
+    feedback: list[str] | None = None
+
+    for attempt in range(2):
+        draft, u = draft_package(client, settings.model_package, profile_text, job, feedback)
+        usage.append((settings.model_package, u))
+        selection = build_selection(draft, profile)
+        rewrites = selection["rewrites"]
+
+        bad_rewrites = {i for i, text in rewrites.items() if deterministic_problems(text, corpus)}
+        summary_bad = bool(selection["summary"]) and bool(
+            deterministic_problems(selection["summary"], corpus)
+        )
+        letter_problems = deterministic_problems(draft.cover_letter, corpus, posting)
+
+        issues, u2 = llm_check(
+            client,
+            settings.model_package,
+            profile_text,
+            summary=selection["summary"] or profile.get("summary", ""),
+            cover_letter=draft.cover_letter,
+            rewrites={i: (original[i], t) for i, t in rewrites.items()},
+            job_text=posting,
+        )
+        usage.append((settings.model_package, u2))
+        for issue in issues:
+            target = issue["target"]
+            if target.startswith("bullet:"):
+                bad_rewrites.add(target.split(":", 1)[1])
+            elif target == "summary":
+                summary_bad = True
+            elif target == "cover_letter":
+                letter_problems.append(issue["problem"])
+
+        for bullet_id in bad_rewrites:
+            rewrites.pop(bullet_id, None)  # fall back to the profile wording
+        if summary_bad:
+            selection["summary"] = None  # renderer then uses the profile summary
+        if letter_problems and attempt == 0:
+            feedback = letter_problems
+            continue
+        warnings = [f"Anschreiben: {p}" for p in letter_problems]
+        if bad_rewrites:
+            warnings.append(
+                f"{len(bad_rewrites)} umformulierte Stichpunkte verworfen (Originaltext bleibt)"
+            )
+        return PackageResult(
+            selection=selection,
+            cover_letter=draft.cover_letter.strip(),
+            gaps=[g.model_dump() for g in draft.gaps],
+            warnings=warnings,
+            usage=usage,
+        )
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+class PackageNotifier(Protocol):
+    def send(self, text: str, job_id: str | None = None) -> None: ...
+    def send_document(self, path: Path, caption: str | None = None) -> None: ...
+
+
+BuildPdf = Callable[[str, bytes | None, Path], Path]
+
+
+def format_gaps(gaps: list[dict[str, str]]) -> str:
+    lines = ["🔍 <b>Gap-Analyse</b>", ""]
+    for g in gaps:
+        icon = _STATUS_ICON.get(g["status"], "•")
+        lines.append(f"{icon} <b>{html.escape(g['requirement'])}</b>\n{html.escape(g['note'])}")
+    return "\n".join(lines)[:4000]
+
+
+def format_letter(letter: str) -> str:
+    return ("✉️ <b>Anschreiben-Entwurf</b>\n\n" + html.escape(letter))[:4000]
+
+
+def run_package(
+    repo: Any,
+    settings: Settings,
+    client: Any,
+    notifier: PackageNotifier,
+    job_id: str,
+    *,
+    build_pdf: BuildPdf,
+    workdir: Path,
+) -> bool:
+    """Build and deliver the package for one job. Returns False if the job is unknown."""
+    row = repo.scored_job(job_id)
+    if row is None:
+        notifier.send("📦 Paket: Diese Stelle ist nicht bekannt.")
+        return False
+    profile_text = repo.private_profile()
+    if not profile_text:
+        raise RuntimeError("profile_private has no row 'main'")
+    profile = yaml.safe_load(profile_text)
+    job = row["jobs"]
+
+    result = create_package(client, settings, profile_text, job)
+
+    photo: bytes | None = None
+    photo_name = profile.get("person", {}).get("photo")
+    if photo_name:
+        try:
+            photo = repo.download_asset(PHOTO_BUCKET, photo_name)
+        except Exception:  # the CV still builds without a photo
+            result.warnings.append("Foto konnte nicht geladen werden, CV ohne Foto")
+
+    tex = render_cv(profile, result.selection, has_photo=photo is not None)
+    pdf_path = build_pdf(tex, photo, workdir)
+    stored_path = f"packages/{job_id}.pdf"
+    repo.upload_asset(PHOTO_BUCKET, stored_path, pdf_path.read_bytes(), "application/pdf")
+    repo.save_package(
+        job_id, cv_pdf_path=stored_path, cover_letter=result.cover_letter, gaps=result.gaps
+    )
+    for model, u in result.usage:
+        repo.log_usage(
+            {
+                "purpose": "package",
+                "model": model,
+                "input_tokens": u.input_tokens,
+                "cache_read_tokens": u.cache_read_tokens,
+                "output_tokens": u.output_tokens,
+                "cost_usd": round(cost_usd(model, u), 6),
+            }
+        )
+
+    notifier.send_document(
+        pdf_path, caption=f"📦 CV für {job['company_name']} – {job['title']}"[:1000]
+    )
+    notifier.send(format_letter(result.cover_letter))
+    notifier.send(format_gaps(result.gaps))
+    if result.warnings:
+        lines = "\n".join(html.escape(w) for w in result.warnings)
+        notifier.send("⚠️ <b>Bitte prüfen</b>\n" + lines)
+    return True

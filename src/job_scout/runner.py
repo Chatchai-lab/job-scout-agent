@@ -1,6 +1,8 @@
 """Wires real clients (Supabase, Anthropic, Telegram) into the pipelines."""
 
 import logging
+import tempfile
+from pathlib import Path
 
 import anthropic
 import httpx
@@ -8,6 +10,8 @@ import httpx
 from job_scout.config import Settings, get_settings
 from job_scout.digest import resend_job, run_digest
 from job_scout.notify import TelegramNotifier
+from job_scout.package import run_package
+from job_scout.pdfbuild import build_pdf
 from job_scout.profile import load_profile_text
 from job_scout.repo import SupabaseRepo
 from job_scout.scoring import score_job
@@ -70,3 +74,25 @@ def run_resend_command(job_id: str) -> None:
     if not resend_job(_repo(settings), notifier, job_id):
         raise SystemExit(f"No scored job with id {job_id}")
     print("Job sent again.")
+
+
+def run_package_command(job_id: str) -> None:
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY must be set")
+    notifier = _notifier(settings)
+    if notifier is None:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
+    llm = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    workdir = Path(tempfile.mkdtemp(prefix="package-"))
+    try:
+        found = run_package(
+            _repo(settings), settings, llm, notifier, job_id, build_pdf=build_pdf, workdir=workdir
+        )
+    except Exception as exc:
+        # Type and a short message only: the CV text must never reach the public Actions log.
+        notifier.send(f"📦 Paket fehlgeschlagen: {type(exc).__name__}")
+        raise SystemExit(f"package failed: {type(exc).__name__}") from None
+    if not found:
+        raise SystemExit(f"No scored job with id {job_id}")
+    print("Package sent.")

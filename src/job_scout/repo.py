@@ -26,6 +26,14 @@ class Repo(Protocol):
         """Score rows joined with their job, notified_at is null."""
         ...
     def mark_notified(self, job_ids: list[str]) -> None: ...
+    def private_profile(self) -> str | None:
+        """Full master profile YAML (with contact data) from profile_private."""
+        ...
+    def download_asset(self, bucket: str, name: str) -> bytes: ...
+    def upload_asset(self, bucket: str, path: str, data: bytes, content_type: str) -> None: ...
+    def save_package(
+        self, job_id: str, *, cv_pdf_path: str, cover_letter: str, gaps: list[dict[str, str]]
+    ) -> None: ...
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         """One score row joined with its job (same shape as unnotified), or None."""
         ...
@@ -41,15 +49,18 @@ class SupabaseRepo:
     def __init__(self, client: Any):
         self.db = client
 
-    def _run(self, query: Any) -> Any:
-        """Execute a query, retrying transient network errors with a short backoff."""
+    def _retry(self, call: Any) -> Any:
+        """Run a call, retrying transient network errors with a short backoff."""
         for attempt in range(_RETRIES + 1):
             try:
-                return query.execute()
+                return call()
             except httpx.TransportError:
                 if attempt == _RETRIES:
                     raise
                 time.sleep(2**attempt)
+
+    def _run(self, query: Any) -> Any:
+        return self._retry(query.execute)
 
     def _all(self, query_fn: Any, key: str = "id") -> list[dict[str, Any]]:
         """Read every row with keyset paging: stable under ties and server-side row caps."""
@@ -125,6 +136,35 @@ class SupabaseRepo:
             key="job_id",
         )
         return [r for r in rows if r.get("jobs")]
+
+    def private_profile(self) -> str | None:
+        rows = self._run(self.db.table("profile_private").select("yaml").eq("id", "main")).data
+        return rows[0]["yaml"] if rows else None
+
+    def download_asset(self, bucket: str, name: str) -> bytes:
+        return self._retry(lambda: self.db.storage.from_(bucket).download(name))
+
+    def upload_asset(self, bucket: str, path: str, data: bytes, content_type: str) -> None:
+        options = {"content-type": content_type, "upsert": "true"}
+        self._retry(lambda: self.db.storage.from_(bucket).upload(path, data, options))
+
+    def save_package(
+        self, job_id: str, *, cv_pdf_path: str, cover_letter: str, gaps: list[dict[str, str]]
+    ) -> None:
+        current = self._run(
+            self.db.table("applications").select("status").eq("job_id", job_id).limit(1)
+        ).data
+        status = current[0]["status"] if current else None
+        keep = status not in (None, "gemerkt", "paket")  # never move an application backwards
+        row = {
+            "job_id": job_id,
+            "status": status if keep else "paket",
+            "cv_pdf_path": cv_pdf_path,
+            "cover_letter": cover_letter,
+            "gaps": gaps,
+            "updated_at": _now(),
+        }
+        self._run(self.db.table("applications").upsert(row, on_conflict="job_id"))
 
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         rows = self._run(

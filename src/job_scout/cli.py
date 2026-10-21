@@ -40,6 +40,12 @@ def main() -> None:
         run_resend_command(args.job_id)
         return
 
+    if args.command == "package":
+        from job_scout.runner import run_package_command
+
+        run_package_command(args.job_id)
+        return
+
     if args.command == "digest":
         from job_scout.runner import run_digest_command
 

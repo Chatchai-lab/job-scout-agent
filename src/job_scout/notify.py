@@ -1,6 +1,7 @@
 """Telegram delivery: one message per job, with inline action buttons."""
 
 import html
+from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
@@ -8,6 +9,7 @@ import httpx
 from job_scout.scoring import ScoreResult
 
 _API = "https://api.telegram.org/bot{token}/sendMessage"
+_DOC_API = "https://api.telegram.org/bot{token}/sendDocument"
 _RING_LABEL = {"kern": "Kern", "nah": "Nah dran", "beratung": "Beratung", "raus": "Raus"}
 
 
@@ -53,6 +55,7 @@ class TelegramNotifier:
         if not token or not chat_id:
             raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
         self._url = _API.format(token=token)
+        self._doc_url = _DOC_API.format(token=token)
         self._chat_id = chat_id
         self._client = client or httpx.Client()
 
@@ -66,4 +69,14 @@ class TelegramNotifier:
         if job_id:
             payload["reply_markup"] = keyboard(job_id)
         response = self._client.post(self._url, json=payload, timeout=20)
+        response.raise_for_status()
+
+    def send_document(self, path: Path, caption: str | None = None) -> None:
+        data = {"chat_id": self._chat_id}
+        if caption:
+            data["caption"] = caption
+        with path.open("rb") as handle:
+            response = self._client.post(
+                self._doc_url, data=data, files={"document": (path.name, handle)}, timeout=60
+            )
         response.raise_for_status()

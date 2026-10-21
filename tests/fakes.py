@@ -18,6 +18,10 @@ class FakeRepo:
         self.rules: list[str] = []
         self.polled: list[str] = []
         self.spent = spent
+        self.profile_text: str | None = None
+        self.assets: dict[tuple[str, str], bytes] = {}
+        self.uploads: dict[tuple[str, str], tuple[bytes, str]] = {}
+        self.packages: dict[str, dict[str, Any]] = {}
 
     def active_companies(self):
         return self.companies
@@ -65,6 +69,19 @@ class FakeRepo:
         for jid in job_ids:
             self.scores[jid]["notified_at"] = "now"
 
+    def private_profile(self):
+        return self.profile_text
+
+    def download_asset(self, bucket, name):
+        return self.assets[(bucket, name)]
+
+    def upload_asset(self, bucket, path, data, content_type):
+        self.uploads[(bucket, path)] = (data, content_type)
+
+    def save_package(self, job_id, *, cv_pdf_path, cover_letter, gaps):
+        self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "cover_letter": cover_letter,
+                                 "gaps": gaps}
+
     def scored_job(self, job_id):
         by_id = {j["id"]: j for j in self.jobs}
         if job_id not in self.scores or job_id not in by_id:
@@ -75,6 +92,10 @@ class FakeRepo:
 class FakeNotifier:
     def __init__(self):
         self.sent: list[tuple[str, str | None]] = []
+        self.docs: list[tuple[str, str | None]] = []
+
+    def send_document(self, path, caption=None):
+        self.docs.append((path.name, caption))
 
     def send(self, text, job_id=None):
         self.sent.append((text, job_id))
@@ -117,3 +138,25 @@ def llm_response(payload: dict[str, Any] | None, usage_obj: Any = None):
             cache_creation_input_tokens=3,
         ),
     )
+
+
+class ScriptedClient:
+    """Stands in for the Anthropic client: returns queued tool inputs per forced tool."""
+
+    def __init__(self, drafts: list[dict[str, Any]], checks: list[list[dict[str, str]]]):
+        self.drafts = list(drafts)
+        self.checks = list(checks)
+        self.calls: list[tuple[str, str]] = []
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs):
+        name = kwargs["tool_choice"]["name"]
+        self.calls.append((name, kwargs["messages"][0]["content"]))
+        payload = self.drafts.pop(0) if name == "submit_package" else {"issues": self.checks.pop(0)}
+        usage = SimpleNamespace(
+            input_tokens=100, output_tokens=50, cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        )
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="tool_use", name=name, input=payload)], usage=usage
+        )

@@ -91,3 +91,12 @@ def test_selection_orders_bullets_and_rewrites_wording():
 def test_selection_cannot_invent_bullets():
     tex = render_cv(PROFILE, {"bullets": {"exp-a": ["exp-a-1", "made-up-id"]}})
     assert "made-up-id" not in tex
+
+
+def test_optional_person_fields_may_be_missing():
+    import copy
+    minimal = copy.deepcopy(PROFILE)
+    for key in ("headline", "address", "phone", "github", "linkedin"):
+        minimal["person"].pop(key)
+    tex = render_cv(minimal)
+    assert "Max Mustermann" in tex and "Adresse" not in tex

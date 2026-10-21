@@ -103,7 +103,10 @@ def build_context(
         for e in profile.get("education", [])
     ]
     projects = []
+    chosen_projects = (selection or {}).get("projects_chosen")
     for p in profile.get("projects", []):
+        if chosen_projects is not None and p["id"] not in chosen_projects:
+            continue
         bullets = _bullets(p, selection)
         if bullets:
             projects.append({"name": p["name"], "url": p.get("url"),
@@ -119,7 +122,8 @@ def build_context(
         skill_rows.append(("Soft Skills", ", ".join(skills["soft"])))
     summary = (selection or {}).get("summary") or profile.get("summary", "")
     return {
-        "person": person, "contact_rows": _contact_rows(person), "photo": has_photo,
+        "person": person, "headline": person.get("headline"),
+        "contact_rows": _contact_rows(person), "photo": has_photo,
         "summary": " ".join(str(summary).split()), "experience": experience,
         "education": education, "projects": projects, "skill_rows": skill_rows,
         "other": profile.get("other", []),
