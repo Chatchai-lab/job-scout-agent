@@ -76,6 +76,14 @@ def run_resend_command(job_id: str) -> None:
     print("Job sent again.")
 
 
+def error_detail(exc: Exception) -> str:
+    """Type plus, for API errors, status and the API's technical message. Never request content:
+    the CV text must not reach the public Actions log."""
+    if isinstance(exc, anthropic.APIStatusError):
+        return f"{type(exc).__name__} {exc.status_code}: {str(exc.message)[:300]}"
+    return type(exc).__name__
+
+
 def run_package_command(job_id: str) -> None:
     settings = get_settings()
     if not settings.anthropic_api_key:
@@ -90,9 +98,9 @@ def run_package_command(job_id: str) -> None:
             _repo(settings), settings, llm, notifier, job_id, build_pdf=build_pdf, workdir=workdir
         )
     except Exception as exc:
-        # Type and a short message only: the CV text must never reach the public Actions log.
-        notifier.send(f"📦 Paket fehlgeschlagen: {type(exc).__name__}")
-        raise SystemExit(f"package failed: {type(exc).__name__}") from None
+        detail = error_detail(exc)
+        notifier.send(f"📦 Paket fehlgeschlagen: {detail}")
+        raise SystemExit(f"package failed: {detail}") from None
     if not found:
         raise SystemExit(f"No scored job with id {job_id}")
     print("Package sent.")
