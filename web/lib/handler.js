@@ -73,6 +73,14 @@ export function makeDb(env, fetchFn) {
       });
       return (await res.json()).length > 0;
     },
+    async lastDecisionAt(jobId, action) {
+      const res = await call(
+        `decisions?job_id=eq.${jobId}&action=eq.${action}&select=at&order=at.desc&limit=1`,
+        { method: "GET" },
+      );
+      const rows = await res.json();
+      return rows.length ? new Date(rows[0].at) : null;
+    },
     async addDecision(jobId, action) {
       await call("decisions", {
         method: "POST",
@@ -107,6 +115,32 @@ export function makeDb(env, fetchFn) {
   };
 }
 
+// Starts the "Package" workflow for one job. The token needs "Actions: write" on this repo only.
+export function makeGithub(env, fetchFn) {
+  const repo = env.GITHUB_REPOSITORY || "Chatchai-lab/job-scout-agent";
+  return {
+    configured: Boolean(env.GITHUB_DISPATCH_TOKEN),
+    async dispatchPackage(jobId) {
+      const res = await fetchFn(
+        `https://api.github.com/repos/${repo}/actions/workflows/package.yml/dispatches`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ref: "main", inputs: { job_id: jobId } }),
+        },
+      );
+      if (res.status !== 204) throw new Error(`github dispatch -> ${res.status}`);
+    },
+  };
+}
+
+export const PACKAGE_COOLDOWN_MS = 5 * 60 * 1000;
+
 export function makeTelegram(env, fetchFn) {
   const call = (method, payload) =>
     fetchFn(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
@@ -122,7 +156,7 @@ export function makeTelegram(env, fetchFn) {
   };
 }
 
-export async function handleUpdate(update, { db, tg, chatId }) {
+export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new Date() }) {
   const cq = update?.callback_query;
   if (!cq) return "ignored";
   if (String(cq.message?.chat?.id) !== String(chatId)) return "wrong_chat";
@@ -155,9 +189,27 @@ export async function handleUpdate(update, { db, tg, chatId }) {
       await tg.answer(cq.id, "Rückgängig gemacht");
       await tg.setKeyboard(msg.chat.id, msg.message_id, jobKeyboard(cmd.jobId));
       return "undone";
-    case "pkg":
-      await tg.answer(cq.id, "📦 Die Paket-Funktion kommt in Kürze.", true);
-      return "package_pending";
+    case "pkg": {
+      if (!gh?.configured) {
+        await tg.answer(cq.id, "📦 Die Paket-Funktion ist noch nicht eingerichtet.", true);
+        return "package_unconfigured";
+      }
+      const last = await db.lastDecisionAt(cmd.jobId, "package");
+      if (last && now() - last < PACKAGE_COOLDOWN_MS) {
+        await tg.answer(cq.id, "📦 Das Paket wird schon gebaut. Es kommt gleich.", true);
+        return "package_running";
+      }
+      try {
+        await gh.dispatchPackage(cmd.jobId);
+      } catch (err) {
+        console.error("package dispatch failed:", err.message);
+        await tg.answer(cq.id, "📦 Das Paket konnte nicht gestartet werden.", true);
+        return "package_failed";
+      }
+      await db.addDecision(cmd.jobId, "package");
+      await tg.answer(cq.id, "📦 Paket wird gebaut. Es kommt in 2 bis 3 Minuten.");
+      return "package_started";
+    }
     default:
       await tg.answer(cq.id, "Unbekannte Aktion");
       return "invalid";

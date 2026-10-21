@@ -1,4 +1,4 @@
-import { handleUpdate, makeDb, makeTelegram } from "../lib/handler.js";
+import { handleUpdate, makeDb, makeGithub, makeTelegram } from "../lib/handler.js";
 
 const REQUIRED = [
   "SUPABASE_URL",
@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     const outcome = await handleUpdate(req.body, {
       db: makeDb(process.env, fetch),
       tg: makeTelegram(process.env, fetch),
+      gh: makeGithub(process.env, fetch),
       chatId: process.env.TELEGRAM_CHAT_ID,
     });
     console.log("callback:", outcome);
