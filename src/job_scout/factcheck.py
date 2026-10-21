@@ -13,7 +13,7 @@ from typing import Any
 import yaml
 
 from job_scout.pricing import Usage
-from job_scout.scoring import usage_from
+from job_scout.toolcall import call_tool
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 # Technologies and tools that must never appear unless the profile mentions them.
@@ -74,10 +74,12 @@ FACTCHECK_TOOL: dict[str, Any] = {
                         "problem": {"type": "string", "description": "What is unsupported."},
                     },
                     "required": ["target", "problem"],
+                    "additionalProperties": False,
                 },
             }
         },
         "required": ["issues"],
+        "additionalProperties": False,
     },
 }
 
@@ -113,25 +115,16 @@ def build_check_user(
 def llm_check(
     client: Any, model: str, profile_text: str, **texts: Any
 ) -> tuple[list[dict[str, str]], Usage]:
-    response = client.messages.create(
+    payload, usage = call_tool(
+        client,
         model=model,
-        max_tokens=1500,
-        system=[
-            {
-                "type": "text",
-                "text": build_check_system(profile_text),
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        tools=[FACTCHECK_TOOL],
-        tool_choice={"type": "tool", "name": "submit_factcheck"},
-        messages=[{"role": "user", "content": build_check_user(**texts)}],
+        system_text=build_check_system(profile_text),
+        tool=FACTCHECK_TOOL,
+        user_text=build_check_user(**texts),
+        max_tokens=8000,  # thinking tokens count against this limit
     )
-    for block in response.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "submit_factcheck":
-            issues = [
-                {"target": str(i.get("target", "")), "problem": str(i.get("problem", ""))}
-                for i in block.input.get("issues", [])
-            ]
-            return issues, usage_from(response)
-    raise ValueError("model did not call submit_factcheck")
+    issues = [
+        {"target": str(i.get("target", "")), "problem": str(i.get("problem", ""))}
+        for i in payload.get("issues", [])
+    ]
+    return issues, usage

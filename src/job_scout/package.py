@@ -18,7 +18,7 @@ from job_scout.config import Settings
 from job_scout.cvrender import render_cv
 from job_scout.factcheck import deterministic_problems, llm_check, profile_corpus
 from job_scout.pricing import Usage, cost_usd
-from job_scout.scoring import usage_from
+from job_scout.toolcall import call_tool
 
 MAX_DESCRIPTION_CHARS = 6000
 PHOTO_BUCKET = "cv-assets"
@@ -66,6 +66,7 @@ DRAFT_TOOL: dict[str, Any] = {
                         "bullet_ids": {"type": "array", "items": {"type": "string"}},
                     },
                     "required": ["entry_id", "bullet_ids"],
+                    "additionalProperties": False,
                 },
             },
             "rewrites": {
@@ -75,6 +76,7 @@ DRAFT_TOOL: dict[str, Any] = {
                     "type": "object",
                     "properties": {"bullet_id": {"type": "string"}, "text": {"type": "string"}},
                     "required": ["bullet_id", "text"],
+                    "additionalProperties": False,
                 },
             },
             "cover_letter": {"type": "string"},
@@ -88,10 +90,12 @@ DRAFT_TOOL: dict[str, Any] = {
                         "note": {"type": "string"},
                     },
                     "required": ["requirement", "status", "note"],
+                    "additionalProperties": False,
                 },
             },
         },
-        "required": ["summary", "picks", "cover_letter", "gaps"],
+        "required": ["summary", "picks", "rewrites", "cover_letter", "gaps"],
+        "additionalProperties": False,
     },
 }
 
@@ -147,24 +151,15 @@ def draft_package(
     client: Any, model: str, profile_text: str, job: dict[str, Any],
     feedback: list[str] | None = None,
 ) -> tuple[Draft, Usage]:
-    response = client.messages.create(
+    payload, usage = call_tool(
+        client,
         model=model,
-        max_tokens=4000,
-        system=[
-            {
-                "type": "text",
-                "text": build_draft_system(profile_text),
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        tools=[DRAFT_TOOL],
-        tool_choice={"type": "tool", "name": "submit_package"},
-        messages=[{"role": "user", "content": build_draft_user(job, feedback)}],
+        system_text=build_draft_system(profile_text),
+        tool=DRAFT_TOOL,
+        user_text=build_draft_user(job, feedback),
+        max_tokens=16000,  # thinking tokens count against this limit
     )
-    for block in response.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "submit_package":
-            return Draft(**block.input), usage_from(response)
-    raise ValueError("model did not call submit_package")
+    return Draft(**payload), usage
 
 
 def _entries(profile: dict[str, Any]) -> dict[str, list[dict[str, str]]]:

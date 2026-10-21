@@ -150,7 +150,9 @@ class ScriptedClient:
         self.messages = SimpleNamespace(create=self._create)
 
     def _create(self, **kwargs):
-        name = kwargs["tool_choice"]["name"]
+        assert kwargs["tool_choice"] == {"type": "auto"}  # forced tool_choice 400s on Sonnet 5.5
+        assert kwargs["tools"][0]["strict"] is True
+        name = kwargs["tools"][0]["name"]
         self.calls.append((name, kwargs["messages"][0]["content"]))
         payload = self.drafts.pop(0) if name == "submit_package" else {"issues": self.checks.pop(0)}
         usage = SimpleNamespace(
@@ -158,5 +160,7 @@ class ScriptedClient:
             cache_creation_input_tokens=0,
         )
         return SimpleNamespace(
-            content=[SimpleNamespace(type="tool_use", name=name, input=payload)], usage=usage
+            content=[SimpleNamespace(type="thinking", thinking=""),
+                     SimpleNamespace(type="tool_use", name=name, input=payload)],
+            usage=usage, stop_reason="tool_use",
         )
