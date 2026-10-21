@@ -18,8 +18,10 @@ class Settings(BaseSettings):
     model_package: str = "claude-sonnet-5-5"
     monthly_budget_eur: float = 5.0
     digest_max_jobs: int = 7
-    score_threshold: int = 6
+    fit_threshold: int = 6
+    reach_threshold: int = 5  # 5 = stretch (about 3 years asked), still ok
     instant_push_threshold: int = 9
+    instant_reach_threshold: int = 6
     include_abroad: bool = False
     eur_per_usd: float = 0.92
     profile_yaml: str = ""

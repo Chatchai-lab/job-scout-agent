@@ -2,7 +2,7 @@ from fakes import FakeNotifier, FakeRepo, posting, score
 
 from job_scout.config import Settings
 from job_scout.digest import run_digest, select_digest
-from job_scout.triage import qualifies
+from job_scout.triage import is_instant, qualifies
 
 
 def _row(fit, reach, ring="kern", start_ok=None):
@@ -14,9 +14,17 @@ def test_qualifies_applies_thresholds_ring_and_start():
     s = Settings()
     assert qualifies(_row(7, 6), s)
     assert not qualifies(_row(5, 9), s)
-    assert not qualifies(_row(9, 5), s)
+    assert qualifies(_row(8, 5), s)  # reach 5 = stretch, still ok
+    assert not qualifies(_row(9, 4), s)
     assert not qualifies(_row(9, 9, ring="raus"), s)
     assert not qualifies(_row(9, 9, start_ok=False), s)
+
+
+def test_instant_push_needs_high_fit_and_reach_6():
+    s = Settings()
+    assert is_instant(_row(9, 6), s)
+    assert not is_instant(_row(9, 5), s)  # stretch goes to the digest, not a push
+    assert not is_instant(_row(8, 9), s)
 
 
 def test_digest_is_ranked_and_capped():

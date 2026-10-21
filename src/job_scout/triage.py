@@ -71,13 +71,17 @@ def qualifies(score: dict[str, Any], settings: Settings) -> bool:
     return (
         score["ring"] != "raus"
         and score.get("start_ok") is not False
-        and score["fit"] >= settings.score_threshold
-        and score["reach"] >= settings.score_threshold
+        and score["fit"] >= settings.fit_threshold
+        and score["reach"] >= settings.reach_threshold
     )
 
 
 def is_instant(score: dict[str, Any], settings: Settings) -> bool:
-    return qualifies(score, settings) and score["fit"] >= settings.instant_push_threshold
+    return (
+        qualifies(score, settings)
+        and score["fit"] >= settings.instant_push_threshold
+        and score["reach"] >= settings.instant_reach_threshold
+    )
 
 
 def fetch_new_jobs(
