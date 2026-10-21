@@ -28,15 +28,15 @@ def _notifier(settings: Settings) -> TelegramNotifier | None:
     return None
 
 
-def run_triage_command() -> None:
+def run_triage_command(notify: bool = True) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY must be set")
     llm = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    notifier = _notifier(settings)
+    notifier = _notifier(settings) if notify else None
     if notifier is None:
-        print("Telegram not configured: running without notifications.")
+        print("Running without Telegram notifications.")
 
     with httpx.Client(headers={"User-Agent": "job-scout-agent"}) as client:
         stats = run_triage(

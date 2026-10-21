@@ -2,8 +2,13 @@ name: Triage
 
 on:
   schedule:
-    - cron: "30 6 * * *" # 08:30 Berlin in summer, 07:30 in winter
+    - cron: "30 5 * * *" # 07:30 Berlin in summer, 06:30 in winter, well before the 09:00 digest
   workflow_dispatch:
+    inputs:
+      notify:
+        description: Send Telegram messages (turn off for a dry run)
+        type: boolean
+        default: true
 
 concurrency:
   group: triage
@@ -20,7 +25,11 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e .
-      - run: job-scout triage
+      - name: Run triage
+        run: |
+          args=""
+          if [ "${{ inputs.notify }}" = "false" ]; then args="--no-notify"; fi
+          job-scout triage $args
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -6,7 +6,10 @@ import argparse
 def main() -> None:
     parser = argparse.ArgumentParser(prog="job-scout")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("triage", help="Fetch, filter and score new jobs; push top hits")
+    triage = sub.add_parser("triage", help="Fetch, filter and score new jobs; push top hits")
+    triage.add_argument(
+        "--no-notify", action="store_true", help="Score and store only, no Telegram messages"
+    )
     sub.add_parser("digest", help="Send the daily Telegram digest")
     sub.add_parser("discover", help="Find new companies and their job boards")
     seed = sub.add_parser("seed-companies", help="Load a companies YAML into Supabase")
@@ -23,10 +26,16 @@ def main() -> None:
         print(f"Seeded {count} companies into Supabase.")
         return
 
-    if args.command in ("triage", "digest"):
-        from job_scout.runner import run_digest_command, run_triage_command
+    if args.command == "triage":
+        from job_scout.runner import run_triage_command
 
-        (run_triage_command if args.command == "triage" else run_digest_command)()
+        run_triage_command(notify=not args.no_notify)
+        return
+
+    if args.command == "digest":
+        from job_scout.runner import run_digest_command
+
+        run_digest_command()
         return
 
     raise SystemExit(f"'{args.command}' is not implemented yet")
