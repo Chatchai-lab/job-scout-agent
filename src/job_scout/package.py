@@ -122,8 +122,10 @@ und Betonung anpassen, nie den Inhalt. Begriffe aus der Anzeige nur verwenden, w
 Originalstichpunkt dasselbe meint.
 - Jede Station (experience-ID) behält mindestens einen Stichpunkt, die relevantesten zuerst. \
 Wenig relevante Stichpunkte darfst du weglassen.
-- Projekte: Projekte mit "pinned: true" im Profil gehören immer in "picks". Dazu wählst du 1 bis 2 \
-weitere passende Projekte. Nimm je Projekt die Stichpunkte, die zur Stelle passen.
+- Projekte: Wähle 2 bis 3 Projekte, die zur Stelle passen, mit den passenden Stichpunkten. \
+Projekte mit "highlight: true" im Profil gehören bei Stellen mit KI-, Automatisierungs-, \
+Applied-AI-, Forward-Deployed- oder Solutions-Bezug immer in "picks". Bei anderen Stellen nimmst \
+du sie nur, wenn sie zur Anzeige passen.
 - headline: Die Überschrift unter dem Namen. "Angehender " plus die Rollenbezeichnung der Stelle, \
 ohne Firma, Ort, (m/w/d) und Seniorität, höchstens 6 Wörter, z. B. "Angehender Forward Deployed \
 Engineer". Das ist die Zielrolle, keine behauptete Erfahrung.
@@ -135,7 +137,10 @@ belegte Fakten.
 "Sehr geehrte Damen und Herren,", endet mit "Mit freundlichen Grüßen" und dem Namen aus dem \
 Profil. Nenne Firma und Stelle, 2 bis 3 belegte Gründe für die Passung, den frühesten Start \
 (März 2027) und den Bachelor-Abschluss im Februar 2027. Sei ehrlich bei Lücken (z. B. wenig \
-Berufserfahrung), ohne zu übertreiben. Keine Platzhalter wie [Name].
+Berufserfahrung), ohne zu übertreiben. Keine Platzhalter wie [Name]. Nenne höchstens EIN Projekt \
+aus dem Profil in ein bis zwei Sätzen, nur als Beleg für etwas, das die Stelle verlangt, und nur \
+bei KI-, Automatisierungs- oder Engineering-Stellen. Der Brief handelt von der Firma und dem \
+Kandidaten, nicht von seinen Projekten.
 - gaps: 4 bis 8 zentrale Anforderungen der Anzeige, je mit Status (erfüllt, teilweise, fehlt) und \
 kurzer Begründung mit Bezug auf das Profil.
 Antworte ausschließlich über das Tool submit_package."""
@@ -199,9 +204,6 @@ def build_selection(draft: Draft, profile: dict[str, Any]) -> dict[str, Any]:
         ids = list(dict.fromkeys(i for i in pick.bullet_ids if i in valid))
         if ids:
             chosen[pick.entry_id] = ids
-    for entry in profile.get("projects", []):
-        if entry.get("pinned") and entry["id"] not in chosen:
-            chosen[entry["id"]] = [b["id"] for b in entry.get("bullets", [])]
     shown = {i for ids in chosen.values() for i in ids}
     rewrites = {
         r.bullet_id: " ".join(r.text.split())

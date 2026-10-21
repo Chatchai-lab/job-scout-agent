@@ -5,7 +5,14 @@ import pytest
 from fakes import FakeNotifier, FakeRepo, ScriptedClient, posting, score
 
 from job_scout.config import Settings
-from job_scout.package import Draft, build_selection, create_package, file_slug, run_package
+from job_scout.package import (
+    INSTRUCTIONS,
+    Draft,
+    build_selection,
+    create_package,
+    file_slug,
+    run_package,
+)
 
 PROFILE = """
 person:
@@ -247,16 +254,16 @@ def test_flagged_or_unsupported_headline_falls_back_to_the_profile_headline():
     assert invented.selection["headline"] is None
 
 
-def test_pinned_projects_are_always_included():
+def test_highlight_flag_is_guidance_for_the_model_not_a_forced_pick():
     import yaml
     profile = yaml.safe_load(PROFILE)
-    profile["projects"][1]["pinned"] = True  # proj-y, which the draft did not pick
+    profile["projects"][1]["highlight"] = True  # proj-y, which the draft did not pick
     sel = build_selection(Draft(**_draft()), profile)
-    assert sel["bullets"]["proj-y"] == ["proj-y-1"]
-    assert set(sel["projects_chosen"]) == {"proj-x", "proj-y"}
+    assert "proj-y" not in sel["bullets"] and sel["projects_chosen"] == ["proj-x"]
+    assert "highlight: true" in INSTRUCTIONS and "EIN Projekt" in INSTRUCTIONS
 
 
 def test_file_slug_makes_safe_ascii_names():
-    assert file_slug("Chatchai Sirichot") == "Chatchai_Sirichot"
+    assert file_slug("Max Mustermann") == "Max_Mustermann"
     assert file_slug("Müller & Söhne GmbH") == "Muller_Sohne_GmbH"
     assert file_slug("???") == "Datei"
