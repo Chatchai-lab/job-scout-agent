@@ -1,0 +1,127 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1.3cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{array}
+\usepackage{titlesec}
+\usepackage{parskip}
+
+\hypersetup{
+    colorlinks=true,
+    urlcolor=blue!60!black,
+    linkcolor=black
+}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{noitemsep, topsep=1pt, parsep=0.5pt, leftmargin=1.2em}
+
+\definecolor{main}{HTML}{1F4E79}
+\definecolor{dark}{HTML}{222222}
+\definecolor{light}{HTML}{666666}
+
+\titleformat{\section}
+  {\large\bfseries\color{main}}
+  {}
+  {0pt}
+  {}
+  [\vspace{1pt}\titlerule]
+\titlespacing*{\section}{0pt}{8pt}{3pt}
+
+\begin{document}
+
+\BLOCK{ if photo }
+\begin{minipage}[t]{0.72\textwidth}
+\BLOCK{ else }
+\begin{minipage}[t]{\textwidth}
+\BLOCK{ endif }
+    {\Huge\bfseries\color{dark} \VAR{ person.name | e }}\\[3pt]
+\BLOCK{ if person.headline }
+    {\large\color{main} \VAR{ person.headline | e }}\\[6pt]
+\BLOCK{ endif }
+
+    \begin{tabular}{>{\bfseries}p{3.0cm}p{8.5cm}}
+\BLOCK{ for label, value in contact_rows }
+        \VAR{ label | e }: & \VAR{ value }\\
+\BLOCK{ endfor }
+    \end{tabular}
+\end{minipage}
+\BLOCK{ if photo }
+\hfill
+\begin{minipage}[t]{0.26\textwidth}
+    \vspace{2pt}
+    \includegraphics[width=\linewidth,keepaspectratio]{photo.jpg}
+\end{minipage}
+\BLOCK{ endif }
+
+\vspace{0.2cm}
+
+\section*{Profil}
+\VAR{ summary | e }
+
+\section*{Berufserfahrung}
+\BLOCK{ for job in experience }
+
+\textbf{\VAR{ job.title | e } / \VAR{ job.company | e }} \hfill \textcolor{light}{\VAR{ job.range | e }}\\
+\textit{\VAR{ job.place | e }}
+\begin{itemize}
+\BLOCK{ for b in job.bullets }
+    \item \VAR{ b.text | e }
+\BLOCK{ endfor }
+\end{itemize}
+\BLOCK{ if not loop.last }
+
+\vspace{3pt}
+\BLOCK{ endif }
+\BLOCK{ endfor }
+
+\section*{Ausbildung}
+\BLOCK{ for ed in education }
+
+\textbf{\VAR{ ed.degree | e }, \VAR{ ed.school | e }} \hfill \textcolor{light}{\VAR{ ed.range | e }}\\
+\BLOCK{ if ed.focus }
+Schwerpunkte: \VAR{ ed.focus | e }
+\BLOCK{ endif }
+\BLOCK{ endfor }
+
+\vspace{0.1cm}
+
+\section*{Kenntnisse}
+
+\begin{tabularx}{\textwidth}{>{\bfseries}p{4.2cm}X}
+\BLOCK{ for label, value in skill_rows }
+\VAR{ label | e }: & \VAR{ value | e }\\
+\BLOCK{ endfor }
+\end{tabularx}
+\BLOCK{ if projects }
+
+\section*{Private Projekte}
+\BLOCK{ for p in projects }
+
+\textbf{\VAR{ p.name | e }}\BLOCK{ if p.url } \href{\VAR{ p.url | eurl }}{(GitHub Repository)}\BLOCK{ endif }\\
+\VAR{ p.text | e }
+\BLOCK{ if not loop.last }
+
+\vspace{2pt}
+\BLOCK{ endif }
+\BLOCK{ endfor }
+\BLOCK{ endif }
+\BLOCK{ if other }
+
+\section*{Weitere Erfahrung}
+\begin{itemize}
+\BLOCK{ for item in other }
+    \item \VAR{ item | e }
+\BLOCK{ endfor }
+\end{itemize}
+\BLOCK{ endif }
+
+\end{document}
