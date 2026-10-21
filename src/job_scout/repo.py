@@ -26,6 +26,9 @@ class Repo(Protocol):
         """Score rows joined with their job, notified_at is null."""
         ...
     def mark_notified(self, job_ids: list[str]) -> None: ...
+    def scored_job(self, job_id: str) -> dict[str, Any] | None:
+        """One score row joined with its job (same shape as unnotified), or None."""
+        ...
 
 
 _PAGE = 1000
@@ -122,6 +125,12 @@ class SupabaseRepo:
             key="job_id",
         )
         return [r for r in rows if r.get("jobs")]
+
+    def scored_job(self, job_id: str) -> dict[str, Any] | None:
+        rows = self._run(
+            self.db.table("scores").select("*, jobs(*)").eq("job_id", job_id).limit(1)
+        ).data
+        return rows[0] if rows and rows[0].get("jobs") else None
 
     def mark_notified(self, job_ids: list[str]) -> None:
         if job_ids:

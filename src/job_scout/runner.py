@@ -6,7 +6,7 @@ import anthropic
 import httpx
 
 from job_scout.config import Settings, get_settings
-from job_scout.digest import run_digest
+from job_scout.digest import resend_job, run_digest
 from job_scout.notify import TelegramNotifier
 from job_scout.profile import load_profile_text
 from job_scout.repo import SupabaseRepo
@@ -60,3 +60,13 @@ def run_digest_command() -> None:
         raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
     sent = run_digest(_repo(settings), settings, notifier)
     print(f"Digest sent with {sent} jobs.")
+
+
+def run_resend_command(job_id: str) -> None:
+    settings = get_settings()
+    notifier = _notifier(settings)
+    if notifier is None:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
+    if not resend_job(_repo(settings), notifier, job_id):
+        raise SystemExit(f"No scored job with id {job_id}")
+    print("Job sent again.")

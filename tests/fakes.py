@@ -65,6 +65,12 @@ class FakeRepo:
         for jid in job_ids:
             self.scores[jid]["notified_at"] = "now"
 
+    def scored_job(self, job_id):
+        by_id = {j["id"]: j for j in self.jobs}
+        if job_id not in self.scores or job_id not in by_id:
+            return None
+        return {**self.scores[job_id], "jobs": by_id[job_id]}
+
 
 class FakeNotifier:
     def __init__(self):

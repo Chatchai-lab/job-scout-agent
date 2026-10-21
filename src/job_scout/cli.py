@@ -14,6 +14,8 @@ def main() -> None:
     sub.add_parser("discover", help="Find new companies and their job boards")
     seed = sub.add_parser("seed-companies", help="Load a companies YAML into Supabase")
     seed.add_argument("path")
+    resend = sub.add_parser("resend", help="Send one stored job to Telegram again")
+    resend.add_argument("job_id")
     pkg = sub.add_parser("package", help="Build the application package for one job")
     pkg.add_argument("job_id")
 
@@ -30,6 +32,12 @@ def main() -> None:
         from job_scout.runner import run_triage_command
 
         run_triage_command(notify=not args.no_notify)
+        return
+
+    if args.command == "resend":
+        from job_scout.runner import run_resend_command
+
+        run_resend_command(args.job_id)
         return
 
     if args.command == "digest":

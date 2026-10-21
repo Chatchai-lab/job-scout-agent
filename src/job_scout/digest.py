@@ -35,3 +35,12 @@ def run_digest(repo: Repo, settings: Settings, notifier: Notifier) -> int:
         notifier.send("☀️ Heute nichts, das die Schwellen erreicht.")
     repo.mark_notified([r["job_id"] for r in chosen])
     return len(chosen)
+
+
+def resend_job(repo: Repo, notifier: Notifier, job_id: str) -> bool:
+    """Send one stored job again with fresh buttons (e.g. after a mis-tap). False if unknown."""
+    row = repo.scored_job(job_id)
+    if row is None:
+        return False
+    notifier.send("🔁 " + format_job(row["jobs"], row), job_id)
+    return True

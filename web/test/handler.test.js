@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { handleUpdate, makeDb, parseCallback } from "../lib/handler.js";
+import { handleUpdate, jobKeyboard, makeDb, parseCallback } from "../lib/handler.js";
 
 const JOB = "123e4567-e89b-42d3-a456-426614174000";
 const CHAT = "1234567890";
@@ -13,6 +13,7 @@ function fakes({ existing = [] } = {}) {
     addDecision: async (id, action) => calls.push(["add", id, action]),
     setReason: async (id, tag) => calls.push(["reason", id, tag]),
     markSaved: async (id) => calls.push(["saved", id]),
+    removeDecisions: async (id) => calls.push(["removed", id]),
   };
   const tg = {
     answer: async (id, text, alert) => calls.push(["answer", text, !!alert]),
@@ -51,7 +52,7 @@ test("reject stores the decision and offers the reason keyboard", async () => {
   assert.equal(await handleUpdate(update(`rej:${JOB}`), f), "rejected");
   assert.deepEqual(f.calls[0], ["add", JOB, "reject"]);
   const markup = f.calls.find((c) => c[0] === "keyboard")[1];
-  assert.equal(markup.inline_keyboard.flat().length, 6);
+  assert.equal(markup.inline_keyboard.flat().length, 7); // 5 reasons + skip + undo
 });
 
 test("a reason is stored, skip stores nothing", async () => {
@@ -85,4 +86,42 @@ test("makeDb sends the service key and throws on errors", async () => {
   await assert.rejects(() => db.addDecision(JOB, "save"));
   assert.equal(seen[0][1], "k");
   assert.ok(seen[0][0].startsWith("https://x.supabase.co/rest/v1/decisions"));
+});
+
+test("undo removes the decisions and restores the three original buttons", async () => {
+  const f = fakes();
+  assert.equal(await handleUpdate(update(`undo:${JOB}`), f), "undone");
+  assert.deepEqual(f.calls[0], ["removed", JOB]);
+  const markup = f.calls.find((c) => c[0] === "keyboard")[1];
+  assert.deepEqual(markup, jobKeyboard(JOB));
+  assert.deepEqual(
+    markup.inline_keyboard[0].map((b) => b.callback_data),
+    [`pkg:${JOB}`, `save:${JOB}`, `rej:${JOB}`],
+  );
+});
+
+test("finished states and the reason keyboard offer an undo button", async () => {
+  const saved = fakes();
+  await handleUpdate(update(`save:${JOB}`), saved);
+  const savedButtons = saved.calls.find((c) => c[0] === "keyboard")[1].inline_keyboard.flat();
+  assert.ok(savedButtons.some((b) => b.callback_data === `undo:${JOB}`));
+
+  const rejected = fakes();
+  await handleUpdate(update(`rej:${JOB}`), rejected);
+  const reasonButtons = rejected.calls.find((c) => c[0] === "keyboard")[1].inline_keyboard.flat();
+  assert.ok(reasonButtons.some((b) => b.callback_data === `undo:${JOB}`));
+});
+
+test("makeDb undo deletes only save and reject decisions and the tracker row", async () => {
+  const seen = [];
+  const fetchFn = async (url, init) => {
+    seen.push([init.method, url]);
+    return { ok: true, status: 204, json: async () => [] };
+  };
+  const db = makeDb({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_KEY: "k" }, fetchFn);
+  await db.removeDecisions(JOB);
+  assert.equal(seen.length, 2);
+  assert.ok(seen[0][1].includes("decisions?") && seen[0][1].includes("action=in.(save,reject)"));
+  assert.ok(seen[1][1].includes("applications?") && seen[1][1].includes("status=eq.gemerkt"));
+  assert.ok(seen.every(([method]) => method === "DELETE"));
 });

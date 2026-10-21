@@ -11,6 +11,21 @@ export const REASONS = {
   other: "Sonstiges",
 };
 
+// Same three buttons the Python notifier attaches to every job message.
+export function jobKeyboard(jobId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📦 Paket", callback_data: `pkg:${jobId}` },
+        { text: "👀 Merken", callback_data: `save:${jobId}` },
+        { text: "❌ Verwerfen", callback_data: `rej:${jobId}` },
+      ],
+    ],
+  };
+}
+
+const undoButton = (jobId) => ({ text: "↩️ Rückgängig", callback_data: `undo:${jobId}` });
+
 export function reasonKeyboard(jobId) {
   const btn = (tag) => ({ text: REASONS[tag], callback_data: `why:${tag}:${jobId}` });
   return {
@@ -18,16 +33,19 @@ export function reasonKeyboard(jobId) {
       [btn("too_senior"), btn("too_much_sales")],
       [btn("company_uninteresting"), btn("boring_task")],
       [btn("other"), { text: "Überspringen", callback_data: `why:skip:${jobId}` }],
+      [undoButton(jobId)],
     ],
   };
 }
 
-const done = (text) => ({ inline_keyboard: [[{ text, callback_data: "noop" }]] });
+const done = (text, jobId) => ({
+  inline_keyboard: [[{ text, callback_data: "noop" }, undoButton(jobId)]],
+});
 
 export function parseCallback(data) {
   const parts = String(data ?? "").split(":");
   if (parts[0] === "noop") return { kind: "noop" };
-  if (["pkg", "save", "rej"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
+  if (["pkg", "save", "rej", "undo"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
     return { kind: parts[0], jobId: parts[1] };
   }
   if (parts[0] === "why" && (parts[1] === "skip" || parts[1] in REASONS) && UUID.test(parts[2] ?? "")) {
@@ -67,6 +85,16 @@ export function makeDb(env, fetchFn) {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({ reason_tag: tag }),
+      });
+    },
+    async removeDecisions(jobId) {
+      await call(`decisions?job_id=eq.${jobId}&action=in.(save,reject)`, {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+      });
+      await call(`applications?job_id=eq.${jobId}&status=eq.gemerkt`, {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
       });
     },
     async markSaved(jobId) {
@@ -110,7 +138,7 @@ export async function handleUpdate(update, { db, tg, chatId }) {
       if (!(await db.hasDecision(cmd.jobId, "save"))) await db.addDecision(cmd.jobId, "save");
       await db.markSaved(cmd.jobId);
       await tg.answer(cq.id, "Gemerkt 👀");
-      await tg.setKeyboard(msg.chat.id, msg.message_id, done("👀 Gemerkt"));
+      await tg.setKeyboard(msg.chat.id, msg.message_id, done("👀 Gemerkt", cmd.jobId));
       return "saved";
     case "rej":
       if (!(await db.hasDecision(cmd.jobId, "reject"))) await db.addDecision(cmd.jobId, "reject");
@@ -120,8 +148,13 @@ export async function handleUpdate(update, { db, tg, chatId }) {
     case "why":
       if (cmd.tag !== "skip") await db.setReason(cmd.jobId, cmd.tag);
       await tg.answer(cq.id, "Danke");
-      await tg.setKeyboard(msg.chat.id, msg.message_id, done("❌ Verworfen"));
+      await tg.setKeyboard(msg.chat.id, msg.message_id, done("❌ Verworfen", cmd.jobId));
       return "reason";
+    case "undo":
+      await db.removeDecisions(cmd.jobId);
+      await tg.answer(cq.id, "Rückgängig gemacht");
+      await tg.setKeyboard(msg.chat.id, msg.message_id, jobKeyboard(cmd.jobId));
+      return "undone";
     case "pkg":
       await tg.answer(cq.id, "📦 Die Paket-Funktion kommt in Kürze.", true);
       return "package_pending";

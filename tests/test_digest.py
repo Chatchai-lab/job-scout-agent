@@ -1,7 +1,7 @@
 from fakes import FakeNotifier, FakeRepo, posting, score
 
 from job_scout.config import Settings
-from job_scout.digest import run_digest, select_digest
+from job_scout.digest import resend_job, run_digest, select_digest
 from job_scout.triage import is_instant, qualifies
 
 
@@ -66,3 +66,20 @@ def test_digest_skips_jobs_the_current_prefilter_would_drop():
     ok = {**_row(8, 8), "jobs": {**_job(1), "location": "Munich, Germany"}}
     stale = {**_row(9, 9), "jobs": {**_job(2), "location": "Singapore", "remote": True}}
     assert select_digest([stale, ok], s) == [ok]
+
+
+def test_resend_sends_the_job_again_with_buttons_and_marker():
+    repo = FakeRepo()
+    repo.insert_jobs([{**_job(1)}])
+    repo.save_score({"job_id": "job-1", **score(fit=8, reach=7).model_dump()})
+    repo.mark_notified(["job-1"])
+    notifier = FakeNotifier()
+    assert resend_job(repo, notifier, "job-1") is True
+    text, job_id = notifier.sent[0]
+    assert text.startswith("🔁") and "Software Engineer 1" in text and job_id == "job-1"
+
+
+def test_resend_unknown_job_sends_nothing():
+    notifier = FakeNotifier()
+    assert resend_job(FakeRepo(), notifier, "nope") is False
+    assert notifier.sent == []
