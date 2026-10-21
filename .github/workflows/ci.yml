@@ -26,3 +26,5 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
+      - run: node --test test/*.test.js
+        working-directory: web
