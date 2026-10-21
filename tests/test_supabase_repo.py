@@ -2,6 +2,9 @@
 
 from typing import Any
 
+import httpx
+import pytest
+
 from job_scout.repo import SupabaseRepo
 
 
@@ -54,3 +57,28 @@ def test_insert_jobs_is_batched():
     repo.insert_jobs([{"id": str(i)} for i in range(250)])
     repo.insert_jobs([])
     assert client.upserts == [("jobs", 100), ("jobs", 100), ("jobs", 50)]
+
+
+class _Flaky:
+    def __init__(self, failures: int):
+        self.failures = failures
+        self.calls = 0
+
+    def execute(self) -> str:
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise httpx.RemoteProtocolError("Server disconnected")
+        return "ok"
+
+
+def test_transient_network_errors_are_retried(monkeypatch):
+    monkeypatch.setattr("job_scout.repo.time.sleep", lambda _s: None)
+    query = _Flaky(failures=2)
+    assert SupabaseRepo(_Client())._run(query) == "ok"
+    assert query.calls == 3
+
+
+def test_persistent_network_errors_are_raised(monkeypatch):
+    monkeypatch.setattr("job_scout.repo.time.sleep", lambda _s: None)
+    with pytest.raises(httpx.RemoteProtocolError):
+        SupabaseRepo(_Client())._run(_Flaky(failures=99))
