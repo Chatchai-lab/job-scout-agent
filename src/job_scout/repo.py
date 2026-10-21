@@ -26,6 +26,7 @@ class Repo(Protocol):
 
 
 _PAGE = 1000
+_WRITE_BATCH = 100  # job rows carry full descriptions; one big upsert hits the statement timeout
 _LOOKBACK_DAYS = 14
 
 
@@ -60,8 +61,9 @@ class SupabaseRepo:
         )
 
     def insert_jobs(self, rows: list[dict[str, Any]]) -> None:
-        if rows:
-            self.db.table("jobs").upsert(rows, on_conflict="source,external_id").execute()
+        for start in range(0, len(rows), _WRITE_BATCH):
+            batch = rows[start : start + _WRITE_BATCH]
+            self.db.table("jobs").upsert(batch, on_conflict="source,external_id").execute()
 
     def unscored_jobs(self) -> list[dict[str, Any]]:
         since = (datetime.now(UTC) - timedelta(days=_LOOKBACK_DAYS)).isoformat()
@@ -73,8 +75,9 @@ class SupabaseRepo:
         return [j for j in jobs if j["id"] not in scored and j["id"] not in dropped]
 
     def insert_drops(self, rows: list[dict[str, Any]]) -> None:
-        if rows:
-            self.db.table("prefilter_drops").upsert(rows, on_conflict="job_id").execute()
+        for start in range(0, len(rows), _WRITE_BATCH):
+            batch = rows[start : start + _WRITE_BATCH]
+            self.db.table("prefilter_drops").upsert(batch, on_conflict="job_id").execute()
 
     def save_score(self, row: dict[str, Any]) -> None:
         self.db.table("scores").upsert(row, on_conflict="job_id").execute()

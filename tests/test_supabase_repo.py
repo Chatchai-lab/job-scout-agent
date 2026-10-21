@@ -23,11 +23,18 @@ class _Query:
 
 
 class _Client:
-    def __init__(self, tables: dict[str, list[dict[str, Any]]]):
-        self._tables = tables
+    def __init__(self, tables: dict[str, list[dict[str, Any]]] | None = None):
+        self._tables = tables or {}
+        self.upserts: list[tuple[str, int]] = []
 
     def table(self, name: str) -> _Query:
-        return _Query(self._tables.get(name, []))
+        query = _Query(self._tables.get(name, []))
+        query.upsert = lambda rows, **_k: self._record(name, rows)  # type: ignore[attr-defined]
+        return query
+
+    def _record(self, name: str, rows: list[dict[str, Any]]) -> "_Query":
+        self.upserts.append((name, len(rows)))
+        return _Query([])
 
 
 def test_unscored_jobs_excludes_scored_and_dropped():
@@ -39,3 +46,11 @@ def test_unscored_jobs_excludes_scored_and_dropped():
         }
     )
     assert [j["id"] for j in SupabaseRepo(client).unscored_jobs()] == ["c"]
+
+
+def test_insert_jobs_is_batched():
+    client = _Client()
+    repo = SupabaseRepo(client)
+    repo.insert_jobs([{"id": str(i)} for i in range(250)])
+    repo.insert_jobs([])
+    assert client.upserts == [("jobs", 100), ("jobs", 100), ("jobs", 50)]
