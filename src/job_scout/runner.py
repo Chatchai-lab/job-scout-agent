@@ -12,7 +12,7 @@ from job_scout.digest import resend_job, run_digest
 from job_scout.notify import TelegramNotifier
 from job_scout.package import run_package
 from job_scout.pdfbuild import build_pdf
-from job_scout.profile import load_profile_text
+from job_scout.profile import load_profile_text, scoring_profile_from_private
 from job_scout.repo import SupabaseRepo
 from job_scout.scoring import score_job
 from job_scout.sources import fetch_for
@@ -24,6 +24,11 @@ def _repo(settings: Settings) -> SupabaseRepo:
     if not settings.supabase_url or not settings.supabase_service_key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
     return SupabaseRepo(create_client(settings.supabase_url, settings.supabase_service_key))
+
+
+def _scoring_profile(settings: Settings, repo: SupabaseRepo) -> str:
+    private = repo.private_profile()
+    return scoring_profile_from_private(private) if private else load_profile_text(settings)
 
 
 def _notifier(settings: Settings) -> TelegramNotifier | None:
@@ -42,13 +47,14 @@ def run_triage_command(notify: bool = True) -> None:
     if notifier is None:
         print("Running without Telegram notifications.")
 
+    repo = _repo(settings)
     with httpx.Client(headers={"User-Agent": "job-scout-agent"}) as client:
         stats = run_triage(
-            _repo(settings),
+            repo,
             settings,
             fetch=fetch_for,
             score_fn=lambda system, job: score_job(llm, settings.model_match, system, job),
-            profile_text=load_profile_text(settings),
+            profile_text=_scoring_profile(settings, repo),
             notifier=notifier,
             client=client,
         )

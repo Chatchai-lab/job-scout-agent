@@ -91,6 +91,12 @@ nicht danach, ob die Rolle kundennah ist. Fehlender Kundenkontakt senkt den Fit 
 Ein klar verlangter Kern-Stack ohne Beleg im Profil (zum Beispiel reines Golang) und echte \
 Senior-Anforderungen senken ihn weiterhin. Solche Rollen bekommen die Stufe "nah".
 
+Sprachen und Werkzeuge in der Skill-Liste und unter "skills_detail" gelten als belegte \
+Kenntnisse aus Studium und Projekten, auch wenn sie nicht aus einer Anstellung stammen. Für \
+Berufseinsteiger-Stellen reichen sie aus. Fordert eine Anzeige ausdrücklich mehrjährige \
+Berufserfahrung in einem Stack, senkt das den Fit, aber nur dort. Was unter "skills_detail" \
+als nicht vorhanden steht (zum Beispiel Java), gilt als fehlend.
+
 Regeln:
 - Junior/Graduate passt immer; "Stretch" bis ca. 3 Jahre Erfahrung ist noch okay (reach mittel).
 - Reisebereitschaft, Branche (auch Defense), Sprache (Deutsch/Englisch), Vertragsart und \
