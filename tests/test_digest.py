@@ -83,3 +83,30 @@ def test_resend_unknown_job_sends_nothing():
     notifier = FakeNotifier()
     assert resend_job(FakeRepo(), notifier, "nope") is False
     assert notifier.sent == []
+
+
+def test_open_applications_line_counts_and_dates():
+    from datetime import UTC, datetime
+
+    from job_scout.digest import open_applications_line
+
+    now = datetime(2026, 11, 20, 10, tzinfo=UTC)
+    apps = [
+        {"applied_at": "2026-11-08T10:00:00+00:00", "updated_at": "2026-11-08T10:00:00+00:00"},
+        {"applied_at": None, "updated_at": "2026-11-18T10:00:00+00:00"},
+    ]
+    assert open_applications_line(apps, now) == "📨 2 offene Bewerbungen, älteste seit 12 Tagen"
+    assert open_applications_line(apps[:1], now).startswith("📨 1 offene Bewerbung,")
+    assert open_applications_line([], now) is None
+
+
+def test_digest_mentions_open_applications():
+    repo = FakeRepo()
+    repo.applications = [
+        {"status": "beworben", "applied_at": "2026-01-01T00:00:00+00:00",
+         "updated_at": "2026-01-01T00:00:00+00:00"},
+        {"status": "gemerkt", "applied_at": None, "updated_at": "2026-01-01T00:00:00+00:00"},
+    ]
+    notifier = FakeNotifier()
+    run_digest(repo, Settings(), notifier)
+    assert "📨 1 offene Bewerbung," in notifier.sent[0][0]

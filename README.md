@@ -22,7 +22,8 @@ It never applies on its own. A human reads everything and sends the application.
 2. **Scoring:** Claude Haiku rates each posting as structured JSON: `fit` (tasks and tech vs. the profile), `reach` (seniority match), a role category, and a short reasoning with the main doubt.
 3. **Digest (daily):** Up to 7 jobs, ranked by fit × reach, one Telegram message each with action buttons. Strong matches are pushed immediately.
 4. **Buttons:** Save, reject (with a one-tap reason) and undo. The decisions are stored for later preference learning.
-5. **Package (on demand):** Claude Sonnet selects and rephrases CV bullets and drafts the letter and gap analysis. A fact check then compares every claim with the profile before anything is rendered.
+5. **Applications (`/bewerbungen`):** A list of everything saved or applied to, with a card per application: set the status (saved, package built, applied, interview, rejection, offer) and send the stored CV or cover letter again. The digest adds one line with the number of open applications and the age of the oldest.
+6. **Package (on demand):** Claude Sonnet selects and rephrases CV bullets and drafts the letter and gap analysis. A fact check then compares every claim with the profile before anything is rendered.
 
 ## Design decisions
 
@@ -82,13 +83,15 @@ pytest && ruff check .
 | `job-scout package <job_id>` | Build and deliver the application package |
 | `job-scout resend <job_id>` | Send a stored job to Telegram again |
 
+The `Telegram Webhook` workflow re-registers the bot webhook with the secrets stored in GitHub, so the token never has to be typed into a browser.
+
 The same commands run as GitHub Actions workflows: `triage` and `digest` on a daily schedule, `package` and `resend` manually with a job id. `ci` runs gitleaks, ruff and both test suites.
 
 ## Status
 
-Working: three job-board sources, prefilter, scoring with budget guard, digest and instant push, button actions with undo, application package with fact check and PDF output.
+Working: three job-board sources, prefilter, scoring with budget guard, digest and instant push, button actions with undo, application package with fact check and PDF output, and the application tracker in Telegram.
 
-Planned: more sources (Personio, Recruitee, SmartRecruiters, job aggregators), company discovery, an application tracker in Telegram, a feedback loop that proposes preference rules from rejections (applied only after approval), a web dashboard.
+Planned: follow-up reminders, more sources (Personio, Recruitee, SmartRecruiters, job aggregators), company discovery, a feedback loop that proposes preference rules from rejections (applied only after approval), a web dashboard.
 
 ## License
 

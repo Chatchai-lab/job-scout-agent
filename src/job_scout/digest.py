@@ -1,5 +1,6 @@
 """Daily digest: the best unnotified, qualifying jobs, max N, ranked by fit x reach."""
 
+from datetime import UTC, datetime
 from typing import Any
 
 from job_scout.config import Settings
@@ -23,16 +24,33 @@ def select_digest(rows: list[dict[str, Any]], settings: Settings) -> list[dict[s
     return good[: settings.digest_max_jobs]
 
 
+def open_applications_line(apps: list[dict[str, Any]], now: datetime | None = None) -> str | None:
+    """'📨 3 offene Bewerbungen, älteste seit 12 Tagen', or None when nothing is open."""
+    if not apps:
+        return None
+    now = now or datetime.now(UTC)
+    since = [
+        datetime.fromisoformat(a.get("applied_at") or a["updated_at"]).astimezone(UTC)
+        for a in apps
+    ]
+    days = max((now - min(since)).days, 0)
+    noun = "offene Bewerbung" if len(apps) == 1 else "offene Bewerbungen"
+    unit = "Tag" if days == 1 else "Tagen"
+    return f"📨 {len(apps)} {noun}, älteste seit {days} {unit}"
+
+
 def run_digest(repo: Repo, settings: Settings, notifier: Notifier) -> int:
     """Send the digest. Only sent jobs are marked; qualifying overflow stays for tomorrow."""
     rows = repo.unnotified()
     chosen = select_digest(rows, settings)
+    open_line = open_applications_line(repo.open_applications())
+    suffix = f"\n{open_line}" if open_line else ""
     if chosen:
-        notifier.send(f"☀️ <b>Dein Job-Digest</b> – {len(chosen)} Treffer")
+        notifier.send(f"☀️ <b>Dein Job-Digest</b> – {len(chosen)} Treffer{suffix}")
         for row in chosen:
             notifier.send(format_job(row["jobs"], row), row["job_id"])
     else:
-        notifier.send("☀️ Heute nichts, das die Schwellen erreicht.")
+        notifier.send("☀️ Heute nichts, das die Schwellen erreicht." + suffix)
     repo.mark_notified([r["job_id"] for r in chosen])
     return len(chosen)
 

@@ -22,6 +22,7 @@ class FakeRepo:
         self.assets: dict[tuple[str, str], bytes] = {}
         self.uploads: dict[tuple[str, str], tuple[bytes, str]] = {}
         self.packages: dict[str, dict[str, Any]] = {}
+        self.applications: list[dict[str, Any]] = []
 
     def active_companies(self):
         return self.companies
@@ -81,6 +82,9 @@ class FakeRepo:
     def save_package(self, job_id, *, cv_pdf_path, letter_pdf_path, cover_letter, gaps):
         self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
                                  "cover_letter": cover_letter, "gaps": gaps}
+
+    def open_applications(self):
+        return [a for a in self.applications if a["status"] in ("beworben", "interview")]
 
     def scored_job(self, job_id):
         by_id = {j["id"]: j for j in self.jobs}

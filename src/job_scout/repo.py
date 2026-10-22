@@ -43,6 +43,9 @@ class Repo(Protocol):
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         """One score row joined with its job (same shape as unnotified), or None."""
         ...
+    def open_applications(self) -> list[dict[str, Any]]:
+        """Applications still waiting for an answer (status beworben or interview)."""
+        ...
 
 
 _PAGE = 1000
@@ -184,6 +187,14 @@ class SupabaseRepo:
             self.db.table("scores").select("*, jobs(*)").eq("job_id", job_id).limit(1)
         ).data
         return rows[0] if rows and rows[0].get("jobs") else None
+
+    def open_applications(self) -> list[dict[str, Any]]:
+        query = (
+            self.db.table("applications")
+            .select("job_id,status,applied_at,updated_at")
+            .in_("status", ["beworben", "interview"])
+        )
+        return self._run(query).data
 
     def mark_notified(self, job_ids: list[str]) -> None:
         if job_ids:
