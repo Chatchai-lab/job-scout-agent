@@ -46,7 +46,8 @@ SCORE_TOOL: dict[str, Any] = {
                 "enum": ["kern", "nah", "beratung", "raus"],
                 "description": (
                     "kern = Forward Deployed Engineer style; nah = adjacent customer-facing "
-                    "AI/engineering; beratung = technical delivery at a consultancy; "
+                    "AI/engineering or regular software/IT developer roles; "
+                    "beratung = technical delivery at a consultancy; "
                     "raus = sales, pre-sales or quota-carrying."
                 ),
             },
@@ -82,6 +83,13 @@ frühester Einstieg März 2027, Erfahrung als Werkstudent/Praktikant in KI und P
 automatisierung). Ziel sind Forward-Deployed-Engineer-artige Rollen in Deutschland: Kunden-\
 nahe technische Umsetzung, Applied AI, Solutions/Customer/Implementation Engineering sowie \
 technische Delivery-Rollen bei Beratungen. Kein Vertrieb, kein Pre-Sales, keine Quota.
+
+Gleichwertig gewünscht sind normale Software- und IT-Entwicklerstellen für Berufseinsteiger: \
+Backend, Fullstack, Cloud/DevOps, Automatisierung und KI-Anwendungen. Bewerte sie nach der \
+Passung von Aufgaben und Technik zum Profil (Python, Cloud, Container, Automatisierung, KI), \
+nicht danach, ob die Rolle kundennah ist. Fehlender Kundenkontakt senkt den Fit dann nicht. \
+Ein klar verlangter Kern-Stack ohne Beleg im Profil (zum Beispiel reines Golang) und echte \
+Senior-Anforderungen senken ihn weiterhin. Solche Rollen bekommen die Stufe "nah".
 
 Regeln:
 - Junior/Graduate passt immer; "Stretch" bis ca. 3 Jahre Erfahrung ist noch okay (reach mittel).
