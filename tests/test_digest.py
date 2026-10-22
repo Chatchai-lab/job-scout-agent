@@ -110,3 +110,35 @@ def test_digest_mentions_open_applications():
     notifier = FakeNotifier()
     run_digest(repo, Settings(), notifier)
     assert "📨 1 offene Bewerbung," in notifier.sent[0][0]
+
+
+def _app(job_id, applied, reminded=None, status="beworben"):
+    return {"job_id": job_id, "status": status, "applied_at": applied, "reminded_at": reminded,
+            "updated_at": applied, "jobs": {"company_name": "Example AI", "title": "FDE"}}
+
+
+def test_due_reminders_after_14_days_without_recent_reminder():
+    from datetime import UTC, datetime
+
+    from job_scout.digest import due_reminders
+
+    now = datetime(2026, 11, 30, tzinfo=UTC)
+    apps = [
+        _app("a", "2026-11-10T00:00:00+00:00"),  # 20 days: due
+        _app("b", "2026-11-20T00:00:00+00:00"),  # 10 days: too early
+        _app("c", "2026-11-01T00:00:00+00:00", reminded="2026-11-25T00:00:00+00:00"),  # recent
+        _app("d", "2026-10-01T00:00:00+00:00", reminded="2026-11-05T00:00:00+00:00"),  # again
+        _app("e", "2026-10-01T00:00:00+00:00", status="interview"),  # not waiting
+    ]
+    assert [a["job_id"] for a in due_reminders(apps, 14, now)] == ["a", "d"]
+
+
+def test_digest_sends_reminder_once_and_marks_it():
+    repo = FakeRepo()
+    repo.applications = [_app("job-x", "2020-01-01T00:00:00+00:00")]
+    notifier = FakeNotifier()
+    run_digest(repo, Settings(), notifier)
+    run_digest(repo, Settings(), notifier)
+    assert len(notifier.reminders) == 1
+    assert "Nachfassen" in notifier.reminders[0][0]
+    assert notifier.reminders[0][1] == "job-x"

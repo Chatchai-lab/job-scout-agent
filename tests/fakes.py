@@ -1,5 +1,6 @@
 """In-memory stand-ins so the pipelines can be tested without network or database."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -83,6 +84,11 @@ class FakeRepo:
         self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
                                  "cover_letter": cover_letter, "gaps": gaps}
 
+    def mark_reminded(self, job_ids):
+        for app in self.applications:
+            if app.get("job_id") in job_ids:
+                app["reminded_at"] = datetime.now(UTC).isoformat()
+
     def open_applications(self):
         return [a for a in self.applications if a["status"] in ("beworben", "interview")]
 
@@ -96,6 +102,7 @@ class FakeRepo:
 class FakeNotifier:
     def __init__(self):
         self.sent: list[tuple[str, str | None]] = []
+        self.reminders: list[tuple[str, str]] = []
         self.docs: list[tuple[str, str | None]] = []
 
     def send_document(self, path, caption=None):
@@ -103,6 +110,9 @@ class FakeNotifier:
 
     def send(self, text, job_id=None):
         self.sent.append((text, job_id))
+
+    def send_reminder(self, text, job_id):
+        self.reminders.append((text, job_id))
 
 
 def posting(title="Forward Deployed Engineer", ext="1", location="Berlin, Germany", **kw):

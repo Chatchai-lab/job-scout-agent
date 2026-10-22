@@ -1,5 +1,6 @@
 """Daily digest: the best unnotified, qualifying jobs, max N, ranked by fit x reach."""
 
+import html
 from datetime import UTC, datetime
 from typing import Any
 
@@ -39,6 +40,40 @@ def open_applications_line(apps: list[dict[str, Any]], now: datetime | None = No
     return f"📨 {len(apps)} {noun}, älteste seit {days} {unit}"
 
 
+def due_reminders(
+    apps: list[dict[str, Any]], days: int, now: datetime | None = None
+) -> list[dict[str, Any]]:
+    """Applications still on 'beworben' for `days` days, not reminded within the last `days`."""
+    now = now or datetime.now(UTC)
+    due = []
+    for app in apps:
+        if app["status"] != "beworben" or not app.get("applied_at") or not app.get("job_id"):
+            continue
+        applied = datetime.fromisoformat(app["applied_at"]).astimezone(UTC)
+        reminded = app.get("reminded_at")
+        recently_reminded = bool(reminded) and (
+            (now - datetime.fromisoformat(reminded).astimezone(UTC)).days < days
+        )
+        if (now - applied).days >= days and not recently_reminded:
+            due.append(app)
+    return due
+
+
+def send_reminders(repo: Repo, settings: Settings, notifier: Notifier) -> int:
+    due = due_reminders(repo.open_applications(), settings.reminder_days)
+    for app in due:
+        job = app.get("jobs") or {}
+        days = (datetime.now(UTC) - datetime.fromisoformat(app["applied_at"])).days
+        text = (
+            f"⏰ <b>Nachfassen?</b>\n{html.escape(job.get('title', ''))}\n"
+            f"{html.escape(job.get('company_name', ''))}\n"
+            f"Beworben vor {days} Tagen, noch keine Rückmeldung eingetragen."
+        )
+        notifier.send_reminder(text, app["job_id"])
+    repo.mark_reminded([a["job_id"] for a in due])
+    return len(due)
+
+
 def run_digest(repo: Repo, settings: Settings, notifier: Notifier) -> int:
     """Send the digest. Only sent jobs are marked; qualifying overflow stays for tomorrow."""
     rows = repo.unnotified()
@@ -52,6 +87,7 @@ def run_digest(repo: Repo, settings: Settings, notifier: Notifier) -> int:
     else:
         notifier.send("☀️ Heute nichts, das die Schwellen erreicht." + suffix)
     repo.mark_notified([r["job_id"] for r in chosen])
+    send_reminders(repo, settings, notifier)
     return len(chosen)
 
 

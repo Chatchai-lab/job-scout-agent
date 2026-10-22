@@ -15,6 +15,7 @@ _RING_LABEL = {"kern": "Kern", "nah": "Nah dran", "beratung": "Beratung", "raus"
 
 class Notifier(Protocol):
     def send(self, text: str, job_id: str | None = None) -> None: ...
+    def send_reminder(self, text: str, job_id: str) -> None: ...
 
 
 def format_job(job: dict[str, Any], score: dict[str, Any] | ScoreResult) -> str:
@@ -50,6 +51,11 @@ def keyboard(job_id: str) -> dict[str, Any]:
     }
 
 
+def reminder_keyboard(job_id: str) -> dict[str, Any]:
+    button = {"text": "📋 Bewerbung öffnen", "callback_data": f"app:{job_id}"}
+    return {"inline_keyboard": [[button]]}
+
+
 class TelegramNotifier:
     def __init__(self, token: str, chat_id: str, client: httpx.Client | None = None):
         if not token or not chat_id:
@@ -60,14 +66,20 @@ class TelegramNotifier:
         self._client = client or httpx.Client()
 
     def send(self, text: str, job_id: str | None = None) -> None:
+        self._post(text, keyboard(job_id) if job_id else None)
+
+    def send_reminder(self, text: str, job_id: str) -> None:
+        self._post(text, reminder_keyboard(job_id))
+
+    def _post(self, text: str, markup: dict[str, Any] | None) -> None:
         payload: dict[str, Any] = {
             "chat_id": self._chat_id,
             "text": text,
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }
-        if job_id:
-            payload["reply_markup"] = keyboard(job_id)
+        if markup:
+            payload["reply_markup"] = markup
         response = self._client.post(self._url, json=payload, timeout=20)
         response.raise_for_status()
 

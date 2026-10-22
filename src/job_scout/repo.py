@@ -46,6 +46,7 @@ class Repo(Protocol):
     def open_applications(self) -> list[dict[str, Any]]:
         """Applications still waiting for an answer (status beworben or interview)."""
         ...
+    def mark_reminded(self, job_ids: list[str]) -> None: ...
 
 
 _PAGE = 1000
@@ -191,10 +192,15 @@ class SupabaseRepo:
     def open_applications(self) -> list[dict[str, Any]]:
         query = (
             self.db.table("applications")
-            .select("job_id,status,applied_at,updated_at")
+            .select("job_id,status,applied_at,updated_at,reminded_at,jobs(company_name,title)")
             .in_("status", ["beworben", "interview"])
         )
         return self._run(query).data
+
+    def mark_reminded(self, job_ids: list[str]) -> None:
+        if job_ids:
+            query = self.db.table("applications").update({"reminded_at": _now()})
+            self._run(query.in_("job_id", job_ids))
 
     def mark_notified(self, job_ids: list[str]) -> None:
         if job_ids:

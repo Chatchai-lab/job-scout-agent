@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     model_package: str = "claude-sonnet-5-5"
     monthly_budget_eur: float = 5.0
     digest_max_jobs: int = 7
+    reminder_days: int = 14  # nudge for applications without news after this many days
     fit_threshold: int = 6
     reach_threshold: int = 5  # 5 = stretch (about 3 years asked), still ok
     instant_push_threshold: int = 9
