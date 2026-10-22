@@ -11,7 +11,7 @@ def main() -> None:
         "--no-notify", action="store_true", help="Score and store only, no Telegram messages"
     )
     sub.add_parser("digest", help="Send the daily Telegram digest")
-    sub.add_parser("discover", help="Find new companies and their job boards")
+    sub.add_parser("discover", help="Find job boards for pending company candidates")
     seed = sub.add_parser("seed-companies", help="Load a companies YAML into Supabase")
     seed.add_argument("path")
     resend = sub.add_parser("resend", help="Send one stored job to Telegram again")
@@ -50,6 +50,12 @@ def main() -> None:
         from job_scout.runner import run_digest_command
 
         run_digest_command()
+        return
+
+    if args.command == "discover":
+        from job_scout.runner import run_discover_command
+
+        run_discover_command()
         return
 
     raise SystemExit(f"'{args.command}' is not implemented yet")

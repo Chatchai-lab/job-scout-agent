@@ -104,3 +104,17 @@ def run_package_command(job_id: str) -> None:
     if not found:
         raise SystemExit(f"No scored job with id {job_id}")
     print("Package sent.")
+
+
+def run_discover_command() -> None:
+    from job_scout.discover import SupabaseCandidateStore, run_discover
+
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_service_key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+    db = create_client(settings.supabase_url, settings.supabase_service_key)
+    store = SupabaseCandidateStore(db)
+    with httpx.Client() as client:
+        found, missing = run_discover(client, store)
+    # Names stay out of the (public) Actions log: only counts.
+    print(f"Discover: {found} boards found, {missing} candidates without a known board.")
