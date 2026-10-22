@@ -19,6 +19,7 @@ from job_scout.sources import fetch_for
 # Most common vendors for German tech companies first.
 ATS_ORDER = [
     "greenhouse", "greenhouse_eu", "ashby", "lever", "personio", "recruitee", "smartrecruiters",
+    "workable", "bamboohr",
 ]
 _SR_LIST = "https://api.smartrecruiters.com/v1/companies/{slug}/postings"
 

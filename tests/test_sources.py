@@ -127,7 +127,8 @@ def test_unknown_ats_raises():
 
 def test_supported_ats_lists_all_registered_sources():
     assert supported_ats() == [
-        "ashby", "greenhouse", "greenhouse_eu", "lever", "personio", "recruitee", "smartrecruiters",
+        "ashby", "bamboohr", "greenhouse", "greenhouse_eu", "lever", "personio", "recruitee",
+        "smartrecruiters", "workable",
     ]
 
 
@@ -228,3 +229,46 @@ def test_smartrecruiters_fetch_reads_list_and_detail():
 
 def test_new_ats_values_are_registered():
     assert {"personio", "recruitee", "smartrecruiters"} <= set(supported_ats())
+
+
+@respx.mock
+def test_workable_fetch_parses_widget_json():
+    respx.get("https://apply.workable.com/api/v1/widget/accounts/exampleco").mock(
+        return_value=httpx.Response(
+            200,
+            json={"jobs": [{
+                "shortcode": "AB12", "title": "Software Engineer", "city": "Stuttgart",
+                "country": "Germany", "telecommuting": False,
+                "url": "https://apply.workable.com/j/AB12",
+                "description": "<p>Build <b>things</b>.</p>",
+                "published_on": "2026-10-01",
+            }]},
+        )
+    )
+    with httpx.Client() as client:
+        jobs = fetch_for("workable", client, "Example Co", "exampleco")
+    assert jobs[0].external_id == "AB12"
+    assert jobs[0].location == "Stuttgart, Germany"
+    assert "Build things" in jobs[0].description
+
+
+@respx.mock
+def test_bamboohr_fetch_reads_list_and_detail():
+    respx.get("https://exampleco.bamboohr.com/careers/list").mock(
+        return_value=httpx.Response(
+            200,
+            json={"result": [{"id": 9, "jobOpeningName": "Implementation Engineer",
+                              "isRemote": True,
+                              "atsLocation": {"city": "Munich", "country": "Germany"}}]},
+        )
+    )
+    respx.get("https://exampleco.bamboohr.com/careers/9/detail").mock(
+        return_value=httpx.Response(
+            200, json={"result": {"jobOpening": {"description": "<p>Onboard <b>clients</b>.</p>"}}}
+        )
+    )
+    with httpx.Client() as client:
+        jobs = fetch_for("bamboohr", client, "Example Co", "exampleco")
+    assert jobs[0].url == "https://exampleco.bamboohr.com/careers/9"
+    assert jobs[0].remote is True
+    assert "Onboard clients" in jobs[0].description
