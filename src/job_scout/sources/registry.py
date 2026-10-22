@@ -5,7 +5,7 @@ from collections.abc import Callable
 import httpx
 
 from job_scout.models import JobPosting
-from job_scout.sources import ashby, greenhouse, lever
+from job_scout.sources import ashby, greenhouse, lever, personio, recruitee, smartrecruiters
 
 FetchFn = Callable[[httpx.Client, str, str], list[JobPosting]]
 
@@ -14,6 +14,9 @@ _REGISTRY: dict[str, FetchFn] = {
     "greenhouse_eu": lambda c, n, s: greenhouse.fetch(c, n, s, ats="greenhouse_eu"),
     "lever": lever.fetch,
     "ashby": ashby.fetch,
+    "personio": personio.fetch,
+    "recruitee": recruitee.fetch,
+    "smartrecruiters": smartrecruiters.fetch,
 }
 
 
