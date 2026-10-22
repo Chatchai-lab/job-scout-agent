@@ -118,3 +118,12 @@ def run_discover_command() -> None:
         found, missing = run_discover(client, store)
     # Names stay out of the (public) Actions log: only counts.
     print(f"Discover: {found} boards found, {missing} candidates without a known board.")
+
+
+def run_maintenance_command(task: str) -> None:
+    from job_scout.maintenance import TASKS
+
+    if task not in TASKS:
+        raise SystemExit(f"unknown task {task!r}; allowed: {', '.join(sorted(TASKS))}")
+    count = TASKS[task](_repo(get_settings()))
+    print(f"Maintenance '{task}': {count} rows changed.")

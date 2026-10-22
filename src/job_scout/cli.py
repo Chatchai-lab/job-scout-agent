@@ -16,6 +16,8 @@ def main() -> None:
     seed.add_argument("path")
     resend = sub.add_parser("resend", help="Send one stored job to Telegram again")
     resend.add_argument("job_id")
+    maint = sub.add_parser("maintenance", help="Run an allow-listed data fix (needs DELETE)")
+    maint.add_argument("task")
     pkg = sub.add_parser("package", help="Build the application package for one job")
     pkg.add_argument("job_id")
 
@@ -50,6 +52,12 @@ def main() -> None:
         from job_scout.runner import run_digest_command
 
         run_digest_command()
+        return
+
+    if args.command == "maintenance":
+        from job_scout.runner import run_maintenance_command
+
+        run_maintenance_command(args.task)
         return
 
     if args.command == "discover":

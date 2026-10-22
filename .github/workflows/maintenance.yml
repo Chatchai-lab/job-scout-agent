@@ -1,0 +1,29 @@
+name: Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Fixed data fix to run
+        type: choice
+        required: true
+        options:
+          - rescore-dev-jobs
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - name: Run task
+        run: job-scout maintenance "$TASK"
+        env:
+          TASK: ${{ inputs.task }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
