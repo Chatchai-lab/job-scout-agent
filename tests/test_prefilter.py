@@ -99,3 +99,21 @@ def test_us_state_and_other_foreign_remote_locations_are_dropped():
 def test_hardware_titles_are_dropped():
     assert prefilter(_job(title="Mechanical Engineer, Kinematic Systems")) == "title_excluded"
     assert prefilter(_job(title="Camera Engineer")) == "title_excluded"
+
+
+def test_internships_and_working_students_are_dropped():
+    for title in (
+        "Engineering Intern",
+        "Software Engineer Internship",
+        "Claude Code Engineer (m/w/d) – Praktikum (München)",
+        "Werkstudent Software Entwicklung (m/w/d)",
+        "Working Student Backend Engineer",
+        "Bachelorarbeit Machine Learning Engineer",
+        "Ausbildung Fachinformatiker Anwendungsentwicklung",
+    ):
+        assert prefilter(_job(title=title)) == "title_excluded", title
+
+
+def test_full_time_junior_roles_are_not_mistaken_for_internships():
+    for title in ("Internal Tools Engineer", "Software Engineer (Graduate)", "Solutions Engineer"):
+        assert prefilter(_job(title=title)) is None, title

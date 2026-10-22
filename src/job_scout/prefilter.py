@@ -3,8 +3,9 @@
 Hard dealbreakers: Senior/Staff/Lead-only titles, US-only and other non-German
 locations (unless abroad is explicitly enabled), and quota-carrying sales roles.
 On top of that the title must look like a development/engineering role and must
-not be research, support or a business function. Everything else — travel,
-industry, language, contract type, salary — is left to the LLM score.
+not be research, support, a business function or a non-full-time role (internship,
+working student, thesis, apprenticeship). Everything else — travel,
+industry, language, salary — is left to the LLM score.
 """
 
 import re
@@ -33,7 +34,9 @@ EXCLUDED_TITLE = re.compile(
     r"research|forschung|support|designer|\bdesign\b|\baccount\b|accountant|recruit|"
     r"counsel|legal|marketing|financ|\bhr\b|\bpeople\b|payroll|compensation|talent|"
     r"\bwriter\b|mechanical|electrical|electronic|hardware|mechatronic|optical|camera|"
-    r"manufacturing|propulsion|structural|\brf\b",
+    r"manufacturing|propulsion|structural|\brf\b|"
+    r"praktik|\bintern\b|internship|werkstudent|working student|\bthesis\b|abschlussarbeit|"
+    r"bachelorarbeit|masterarbeit|ausbildung|apprentice|duales studium",
     re.IGNORECASE,
 )
 
