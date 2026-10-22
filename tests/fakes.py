@@ -42,7 +42,10 @@ class FakeRepo:
             self.jobs.append({**r, "id": f"job-{len(self.jobs) + 1}"})
 
     def unscored_jobs(self):
-        return [j for j in self.jobs if j["id"] not in self.scores and j["id"] not in self.drops]
+        return [
+            j for j in self.jobs
+            if j["id"] not in self.scores and j["id"] not in self.drops and not j.get("closed_at")
+        ]
 
     def insert_drops(self, rows):
         for r in rows:
@@ -83,6 +86,17 @@ class FakeRepo:
     def save_package(self, job_id, *, cv_pdf_path, letter_pdf_path, cover_letter, gaps):
         self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
                                  "cover_letter": cover_letter, "gaps": gaps}
+
+    def job_presence(self):
+        return [
+            {"missing_runs": 0, "closed_at": None, "company_id": None, **j} for j in self.jobs
+        ]
+
+    def set_job_presence(self, job_ids, *, missing_runs, closed):
+        for job in self.jobs:
+            if job["id"] in job_ids:
+                job["missing_runs"] = missing_runs
+                job["closed_at"] = "now" if closed else None
 
     def mark_reminded(self, job_ids):
         for app in self.applications:

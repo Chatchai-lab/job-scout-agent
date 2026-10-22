@@ -9,7 +9,7 @@ from job_scout.repo import SupabaseRepo
 
 
 class _Query:
-    """Just enough of the postgrest query builder: gt, order, limit, range."""
+    """Just enough of the postgrest query builder: is_, gt, order, limit, range."""
 
     def __init__(self, rows: list[dict[str, Any]]):
         self._rows = rows
@@ -22,6 +22,9 @@ class _Query:
 
     def eq(self, column: str, value: Any) -> "_Query":
         return _Query([r for r in self._rows if r.get(column) == value])
+
+    def is_(self, column: str, value: Any) -> "_Query":
+        return _Query([r for r in self._rows if (r.get(column) is None) == (value == "null")])
 
     def gt(self, column: str, value: Any) -> "_Query":
         return _Query([r for r in self._rows if r[column] > value])

@@ -121,3 +121,41 @@ def test_approved_rules_reach_the_system_prompt():
     _run(repo, [posting()], score_fn)
     assert "Keine Rollen mit Außendienst-Vertrieb" in seen[0]
     assert "person: test" in seen[0]
+
+
+def _closed(repo):
+    return {j["external_id"]: j.get("closed_at") for j in repo.jobs}
+
+
+def test_job_missing_twice_in_a_row_is_closed():
+    repo = FakeRepo([COMPANY])
+    _run(repo, [posting(ext="1"), posting(ext="2", title="Solutions Engineer")])
+    _run(repo, [posting(ext="1")])
+    assert _closed(repo) == {"1": None, "2": None}  # first miss only counts
+    stats = _run(repo, [posting(ext="1")])
+    assert _closed(repo) == {"1": None, "2": "now"}
+    assert stats.closed_jobs == 1
+
+
+def test_job_that_reappears_is_reset():
+    repo = FakeRepo([COMPANY])
+    _run(repo, [posting(ext="1"), posting(ext="2", title="Solutions Engineer")])
+    _run(repo, [posting(ext="1")])
+    _run(repo, [posting(ext="1"), posting(ext="2", title="Solutions Engineer")])
+    job = next(j for j in repo.jobs if j["external_id"] == "2")
+    assert job["missing_runs"] == 0 and job["closed_at"] is None
+
+
+def test_empty_or_failed_board_closes_nothing():
+    repo = FakeRepo([COMPANY])
+    _run(repo, [posting(ext="1")])
+    for _ in range(3):
+        _run(repo, [])
+    assert _closed(repo) == {"1": None}
+
+    def boom(ats, client, name, slug):
+        raise RuntimeError("down")
+
+    for _ in range(3):
+        _run(repo, [], fetch=boom)
+    assert _closed(repo) == {"1": None}

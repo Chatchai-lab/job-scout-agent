@@ -21,6 +21,8 @@ from job_scout.scoring import ScoreResult, build_system
 
 log = logging.getLogger("job_scout.triage")
 
+MISSING_RUNS_TO_CLOSE = 2  # one miss can be a glitch; two polls in a row mean the posting is gone
+
 FetchFn = Callable[[str, httpx.Client, str, str], list[JobPosting]]
 ScoreFn = Callable[[str, JobPosting], tuple[ScoreResult, Any]]
 
@@ -31,6 +33,7 @@ class TriageStats:
     companies_failed: int = 0
     new_jobs: int = 0
     dropped: int = 0
+    closed_jobs: int = 0
     scored: int = 0
     score_errors: int = 0
     instant_pushed: int = 0
@@ -89,6 +92,7 @@ def fetch_new_jobs(
 ) -> None:
     known_ids, known_keys = repo.known_jobs()
     rows: list[dict[str, Any]] = []
+    seen: dict[str, set[tuple[str, str]]] = {}  # company id -> postings its board lists today
     for company in repo.active_companies():
         if company["ats"] == "none" or not company.get("ats_slug"):
             continue
@@ -101,6 +105,8 @@ def fetch_new_jobs(
             continue
         stats.companies_polled += 1
         repo.mark_polled(company["id"])
+        if postings:  # an empty board may be an outage, so it never closes anything
+            seen[company["id"]] = {(p.source, p.external_id) for p in postings}
         for posting in postings:
             ident = (posting.source, posting.external_id)
             if ident in known_ids or posting.dedup_key in known_keys:
@@ -108,8 +114,30 @@ def fetch_new_jobs(
             known_ids.add(ident)
             known_keys.add(posting.dedup_key)
             rows.append(_job_row(posting, company["id"]))
+    update_presence(repo, seen, stats)
     repo.insert_jobs(rows)
     stats.new_jobs = len(rows)
+
+
+def update_presence(
+    repo: Repo, seen: dict[str, set[tuple[str, str]]], stats: TriageStats
+) -> None:
+    """Count polls in which a stored job is missing; close it after two in a row."""
+    groups: dict[tuple[int, bool], list[str]] = {}
+    for job in repo.job_presence():
+        idents = seen.get(job.get("company_id") or "")
+        if idents is None:
+            continue  # board not polled (or empty) today: nothing is known
+        if (job["source"], job["external_id"]) in idents:
+            if job.get("missing_runs") or job.get("closed_at"):
+                groups.setdefault((0, False), []).append(job["id"])  # back on the board
+        elif not job.get("closed_at"):
+            missing = (job.get("missing_runs") or 0) + 1
+            closed = missing >= MISSING_RUNS_TO_CLOSE
+            groups.setdefault((missing, closed), []).append(job["id"])
+            stats.closed_jobs += closed
+    for (missing, closed), ids in groups.items():
+        repo.set_job_presence(ids, missing_runs=missing, closed=closed)
 
 
 def score_pending(

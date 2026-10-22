@@ -46,6 +46,12 @@ class Repo(Protocol):
     def open_applications(self) -> list[dict[str, Any]]:
         """Applications still waiting for an answer (status beworben or interview)."""
         ...
+    def job_presence(self) -> list[dict[str, Any]]:
+        """id, company_id, source, external_id, missing_runs, closed_at of every stored job."""
+        ...
+    def set_job_presence(
+        self, job_ids: list[str], *, missing_runs: int, closed: bool
+    ) -> None: ...
     def mark_reminded(self, job_ids: list[str]) -> None: ...
 
 
@@ -112,7 +118,10 @@ class SupabaseRepo:
     def unscored_jobs(self) -> list[dict[str, Any]]:
         since = (datetime.now(UTC) - timedelta(days=_LOOKBACK_DAYS)).isoformat()
         jobs = self._all(
-            lambda: self.db.table("jobs").select("*").gte("first_seen_at", since)
+            lambda: self.db.table("jobs")
+            .select("*")
+            .gte("first_seen_at", since)
+            .is_("closed_at", "null")
         )
         scored = self._ids("scores")
         dropped = self._ids("prefilter_drops")
@@ -188,6 +197,16 @@ class SupabaseRepo:
             self.db.table("scores").select("*, jobs(*)").eq("job_id", job_id).limit(1)
         ).data
         return rows[0] if rows and rows[0].get("jobs") else None
+
+    def job_presence(self) -> list[dict[str, Any]]:
+        columns = "id,company_id,source,external_id,missing_runs,closed_at"
+        return self._all(lambda: self.db.table("jobs").select(columns))
+
+    def set_job_presence(self, job_ids: list[str], *, missing_runs: int, closed: bool) -> None:
+        values = {"missing_runs": missing_runs, "closed_at": _now() if closed else None}
+        for start in range(0, len(job_ids), _WRITE_BATCH):
+            batch = job_ids[start : start + _WRITE_BATCH]
+            self._run(self.db.table("jobs").update(values).in_("id", batch))
 
     def open_applications(self) -> list[dict[str, Any]]:
         query = (

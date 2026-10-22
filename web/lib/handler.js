@@ -114,14 +114,14 @@ export function makeDb(env, fetchFn) {
     async listApplications() {
       const res = await call(
         "applications?select=job_id,status,applied_at,updated_at,cv_pdf_path,letter_pdf_path," +
-          "jobs(company_name,title,url)&order=updated_at.desc&limit=100",
+          "jobs(company_name,title,url,closed_at)&order=updated_at.desc&limit=100",
         { method: "GET" },
       );
       return (await res.json()).filter((a) => a.jobs);
     },
     async getApplication(jobId) {
       const res = await call(
-        `applications?job_id=eq.${jobId}&select=*,jobs(company_name,title,url)&limit=1`,
+        `applications?job_id=eq.${jobId}&select=*,jobs(company_name,title,url,closed_at)&limit=1`,
         { method: "GET" },
       );
       const rows = (await res.json()).filter((a) => a.jobs);

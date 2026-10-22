@@ -85,6 +85,14 @@ test("card escapes text, marks the current status and offers files only with a p
   assert.equal(all.find((b) => b.url).url, "https://example.com/j");
 });
 
+test("card warns when the posting is no longer listed", () => {
+  const open = cardView(app(A, "gemerkt"));
+  assert.ok(!open.text.includes("nicht mehr ausgeschrieben"));
+  const gone = app(A, "gemerkt");
+  gone.jobs.closed_at = "2026-10-20T10:00:00Z";
+  assert.ok(cardView(gone).text.includes("⚠️ Stelle nicht mehr ausgeschrieben seit 20.10.2026"));
+});
+
 test("old packages are found under their former names and sent with friendly file names", () => {
   assert.equal(letterPath({ cv_pdf_path: `packages/${A}.pdf` }), `packages/${A}-anschreiben.pdf`);
   assert.equal(letterPath({ cv_pdf_path: "packages/x/CV.pdf", letter_pdf_path: "packages/x/Brief.pdf" }), "packages/x/Brief.pdf");

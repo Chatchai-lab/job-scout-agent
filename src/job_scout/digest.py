@@ -16,6 +16,8 @@ def _still_allowed(row: dict[str, Any], settings: Settings) -> bool:
     job = row.get("jobs")
     if not job:
         return True
+    if job.get("closed_at"):
+        return False  # the posting is gone from the company board
     return prefilter(posting_from_row(job), include_abroad=settings.include_abroad) is None
 
 

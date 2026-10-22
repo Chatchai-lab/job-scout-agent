@@ -76,6 +76,9 @@ export function cardView(app) {
     "",
     `Status: ${status.icon} ${status.label}`,
   ];
+  if (job.closed_at) {
+    lines.push(`⚠️ Stelle nicht mehr ausgeschrieben seit ${formatDate(job.closed_at)}`);
+  }
   if (app.applied_at) lines.push(`Beworben am: ${formatDate(app.applied_at)}`);
   lines.push(`Zuletzt geändert: ${formatDate(app.updated_at)}`);
 

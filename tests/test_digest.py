@@ -142,3 +142,12 @@ def test_digest_sends_reminder_once_and_marks_it():
     assert len(notifier.reminders) == 1
     assert "Nachfassen" in notifier.reminders[0][0]
     assert notifier.reminders[0][1] == "job-x"
+
+
+def test_digest_skips_closed_jobs():
+    repo = FakeRepo()
+    repo.insert_jobs([_job(1)])
+    repo.save_score({"job_id": "job-1", **score().model_dump()})
+    repo.jobs[0]["closed_at"] = "2026-10-20T00:00:00+00:00"
+    notifier = FakeNotifier()
+    assert run_digest(repo, Settings(), notifier) == 0
