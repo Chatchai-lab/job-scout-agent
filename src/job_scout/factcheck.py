@@ -56,6 +56,8 @@ def deterministic_problems(text: str, *sources: str) -> list[str]:
     return problems
 
 
+REAL_VERDICTS = ("unbelegt", "übertrieben")
+
 FACTCHECK_TOOL: dict[str, Any] = {
     "name": "submit_factcheck",
     "description": "Report every claim in the generated texts that the profile does not support.",
@@ -72,8 +74,13 @@ FACTCHECK_TOOL: dict[str, Any] = {
                             "description": "summary, cover_letter or bullet:<bullet id>",
                         },
                         "problem": {"type": "string", "description": "What is unsupported."},
+                        "verdict": {
+                            "type": "string",
+                            "enum": list(REAL_VERDICTS),
+                            "description": "Only real problems; supported claims are not listed.",
+                        },
                     },
-                    "required": ["target", "problem"],
+                    "required": ["target", "problem", "verdict"],
                     "additionalProperties": False,
                 },
             }
@@ -94,6 +101,8 @@ Melde einen Fehler, wenn ein Text Folgendes enthält, das das Profil nicht beleg
 Nicht gemeldet wird: die Zielrolle in "headline" und "summary" ("Angehender <Rolle der Stelle>" \
 ist ein Berufsziel, keine behauptete Erfahrung), andere Wortwahl, Umstellung der Reihenfolge, \
 Verweise auf die ausgeschriebene Stelle und die Firma, allgemeine Motivation, Start im März 2027.
+Liste NUR echte Probleme. Ein Punkt, der belegt, unkritisch oder in Ordnung ist, gehört nicht \
+in die Liste. Fasse dich in "problem" auf einen kurzen Satz.
 Gib bei "target" an: headline, summary, cover_letter oder bullet:<id>. Wenn alles belegt ist: \
 leere Liste.
 Antworte ausschließlich über das Tool submit_factcheck."""
@@ -135,5 +144,6 @@ def llm_check(
     issues = [
         {"target": str(i.get("target", "")), "problem": str(i.get("problem", ""))}
         for i in payload.get("issues", [])
+        if i.get("verdict", REAL_VERDICTS[0]) in REAL_VERDICTS
     ]
     return issues, usage

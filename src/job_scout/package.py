@@ -146,6 +146,9 @@ kurzer Begründung mit Bezug auf das Profil.
 Antworte ausschließlich über das Tool submit_package."""
 
 
+MAX_WARNING_ISSUES = 3
+
+
 def build_draft_system(profile_text: str) -> str:
     return INSTRUCTIONS + "\n\n## Profil (einzige Faktenquelle)\n" + profile_text
 
@@ -291,7 +294,7 @@ def create_package(
         if letter_problems and attempt == 0:
             feedback = letter_problems
             continue
-        warnings = [f"Anschreiben: {p}" for p in letter_problems]
+        warnings = [f"Anschreiben: {p}" for p in letter_problems[:MAX_WARNING_ISSUES]]
         if bad_rewrites:
             warnings.append(
                 f"{len(bad_rewrites)} umformulierte Stichpunkte verworfen (Originaltext bleibt)"

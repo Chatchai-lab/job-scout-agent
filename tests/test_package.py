@@ -270,3 +270,20 @@ def test_file_slug_makes_safe_ascii_names():
     assert file_slug("Max Mustermann") == "Max_Mustermann"
     assert file_slug("Müller & Söhne GmbH") == "Muller_Sohne_GmbH"
     assert file_slug("???") == "Datei"
+
+
+def test_llm_items_without_a_real_verdict_are_ignored():
+    flags = [{"target": "cover_letter", "problem": "ist belegt", "verdict": "belegt"}]
+    result, _ = _create([_draft()], [flags])
+    assert result.warnings == []
+
+
+def test_warning_lists_at_most_three_letter_problems():
+    from job_scout.package import MAX_WARNING_ISSUES
+
+    flags = [
+        {"target": "cover_letter", "problem": f"Fehler {n}", "verdict": "unbelegt"}
+        for n in range(5)
+    ]
+    result, _ = _create([_draft(), _draft()], [flags, flags])
+    assert len([w for w in result.warnings if w.startswith("Anschreiben")]) == MAX_WARNING_ISSUES
