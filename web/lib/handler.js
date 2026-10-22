@@ -1,6 +1,8 @@
 // Telegram button callbacks: 👀 save, ❌ reject (+ one-tap reason), 📦 package (later).
 // All state lives in Supabase; this function only writes `decisions` and edits the message.
 
+import { STATUS, cardView, letterPath, listView, sendName } from "./applications.js";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const REASONS = {
@@ -45,7 +47,11 @@ const done = (text, jobId) => ({
 export function parseCallback(data) {
   const parts = String(data ?? "").split(":");
   if (parts[0] === "noop") return { kind: "noop" };
-  if (["pkg", "save", "rej", "undo"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
+  if (parts[0] === "apps") return { kind: "apps" };
+  if (parts[0] === "st" && parts[1] in STATUS && UUID.test(parts[2] ?? "")) {
+    return { kind: "st", status: parts[1], jobId: parts[2] };
+  }
+  if (["pkg", "save", "rej", "undo", "app", "cv", "ltr"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
     return { kind: parts[0], jobId: parts[1] };
   }
   if (parts[0] === "why" && (parts[1] === "skip" || parts[1] in REASONS) && UUID.test(parts[2] ?? "")) {
@@ -105,6 +111,46 @@ export function makeDb(env, fetchFn) {
         headers: { Prefer: "return=minimal" },
       });
     },
+    async listApplications() {
+      const res = await call(
+        "applications?select=job_id,status,applied_at,updated_at,cv_pdf_path,letter_pdf_path," +
+          "jobs(company_name,title,url)&order=updated_at.desc&limit=100",
+        { method: "GET" },
+      );
+      return (await res.json()).filter((a) => a.jobs);
+    },
+    async getApplication(jobId) {
+      const res = await call(
+        `applications?job_id=eq.${jobId}&select=*,jobs(company_name,title,url)&limit=1`,
+        { method: "GET" },
+      );
+      const rows = (await res.json()).filter((a) => a.jobs);
+      return rows[0] ?? null;
+    },
+    async setStatus(jobId, status) {
+      const now = new Date().toISOString();
+      const body = { status, updated_at: now };
+      if (status === "gemerkt" || status === "paket") body.applied_at = null;
+      await call(`applications?job_id=eq.${jobId}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(body),
+      });
+      if (status === "beworben") {
+        await call(`applications?job_id=eq.${jobId}&applied_at=is.null`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ applied_at: now }),
+        });
+      }
+    },
+    async downloadAsset(path) {
+      const res = await fetchFn(`${env.SUPABASE_URL}/storage/v1/object/cv-assets/${encodeURI(path)}`, {
+        headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+      });
+      if (!res.ok) throw new Error(`storage ${path} -> ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
+    },
     async markSaved(jobId) {
       await call("applications?on_conflict=job_id", {
         method: "POST",
@@ -151,12 +197,63 @@ export function makeTelegram(env, fetchFn) {
   return {
     answer: (id, text, alert = false) =>
       call("answerCallbackQuery", { callback_query_id: id, text, show_alert: alert }),
+    send: (chatId, text, markup) =>
+      call("sendMessage", {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        ...(markup ? { reply_markup: markup } : {}),
+      }),
+    edit: (chatId, messageId, text, markup) =>
+      call("editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        reply_markup: markup,
+      }),
+    sendDocument: (chatId, bytes, filename, caption) => {
+      const form = new FormData();
+      form.append("chat_id", String(chatId));
+      if (caption) form.append("caption", caption);
+      form.append("document", new Blob([bytes], { type: "application/pdf" }), filename);
+      return fetchFn(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+        method: "POST",
+        body: form,
+      });
+    },
+    setCommands: () =>
+      call("setMyCommands", {
+        commands: [{ command: "bewerbungen", description: "Meine Bewerbungen" }],
+      }),
     setKeyboard: (chatId, messageId, markup) =>
       call("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: markup }),
   };
 }
 
+async function handleMessage(message, { db, tg, chatId }) {
+  if (String(message.chat?.id) !== String(chatId)) return "wrong_chat";
+  const command = String(message.text ?? "").trim().split(/[\s@]/)[0].toLowerCase();
+  if (command === "/start") {
+    await tg.setCommands();
+    await tg.send(
+      chatId,
+      "✅ Job Scout ist bereit.\nÖffne das Menü ☰ neben dem Eingabefeld und wähle „Meine Bewerbungen“.",
+    );
+    return "start";
+  }
+  if (command === "/bewerbungen") {
+    const view = listView(await db.listApplications());
+    await tg.send(chatId, view.text, view.markup);
+    return "list";
+  }
+  return "ignored";
+}
+
 export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new Date() }) {
+  if (update?.message) return handleMessage(update.message, { db, tg, chatId });
   const cq = update?.callback_query;
   if (!cq) return "ignored";
   if (String(cq.message?.chat?.id) !== String(chatId)) return "wrong_chat";
@@ -189,6 +286,38 @@ export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new
       await tg.answer(cq.id, "Rückgängig gemacht");
       await tg.setKeyboard(msg.chat.id, msg.message_id, jobKeyboard(cmd.jobId));
       return "undone";
+    case "apps": {
+      const view = listView(await db.listApplications());
+      await tg.edit(msg.chat.id, msg.message_id, view.text, view.markup);
+      await tg.answer(cq.id, "");
+      return "list";
+    }
+    case "app":
+    case "st": {
+      if (cmd.kind === "st") await db.setStatus(cmd.jobId, cmd.status);
+      const app = await db.getApplication(cmd.jobId);
+      if (!app) {
+        await tg.answer(cq.id, "Diese Bewerbung gibt es nicht mehr.", true);
+        return "app_missing";
+      }
+      const view = cardView(app);
+      await tg.edit(msg.chat.id, msg.message_id, view.text, view.markup);
+      await tg.answer(cq.id, cmd.kind === "st" ? `${STATUS[cmd.status].icon} ${STATUS[cmd.status].label}` : "");
+      return cmd.kind === "st" ? "status_set" : "card";
+    }
+    case "cv":
+    case "ltr": {
+      const app = await db.getApplication(cmd.jobId);
+      const path = app && (cmd.kind === "cv" ? app.cv_pdf_path : letterPath(app));
+      if (!path) {
+        await tg.answer(cq.id, "Dazu gibt es noch kein Paket. Tippe in der Stelle auf 📦.", true);
+        return "file_missing";
+      }
+      const bytes = await db.downloadAsset(path);
+      await tg.sendDocument(msg.chat.id, bytes, sendName(path, cmd.kind), `${app.jobs.company_name} – ${app.jobs.title.trim()}`.slice(0, 200));
+      await tg.answer(cq.id, "📄 Wird gesendet");
+      return "file_sent";
+    }
     case "pkg": {
       if (!gh?.configured) {
         await tg.answer(cq.id, "📦 Die Paket-Funktion ist noch nicht eingerichtet.", true);

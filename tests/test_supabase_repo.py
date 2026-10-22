@@ -111,9 +111,14 @@ def test_private_profile_returns_the_yaml_text():
 
 def test_save_package_sets_status_paket_but_never_moves_back():
     new = _Client({"applications": [{"job_id": "j1", "status": "gemerkt"}]})
-    SupabaseRepo(new).save_package("j1", cv_pdf_path="p.pdf", cover_letter="x", gaps=[])
+    SupabaseRepo(new).save_package(
+        "j1", cv_pdf_path="p.pdf", letter_pdf_path="l.pdf", cover_letter="x", gaps=[]
+    )
     assert new.payloads[-1][1]["status"] == "paket"
+    assert new.payloads[-1][1]["letter_pdf_path"] == "l.pdf"
 
     advanced = _Client({"applications": [{"job_id": "j2", "status": "beworben"}]})
-    SupabaseRepo(advanced).save_package("j2", cv_pdf_path="p.pdf", cover_letter="x", gaps=[])
+    SupabaseRepo(advanced).save_package(
+        "j2", cv_pdf_path="p.pdf", letter_pdf_path="l.pdf", cover_letter="x", gaps=[]
+    )
     assert advanced.payloads[-1][1]["status"] == "beworben"

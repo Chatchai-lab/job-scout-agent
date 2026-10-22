@@ -182,9 +182,12 @@ def test_run_package_builds_stores_logs_and_delivers(tmp_path: Path):
     client = ScriptedClient([_draft()], [[]])
     assert run_package(repo, Settings(), client, notifier, "job-1",
                        build_pdf=_fake_build, workdir=tmp_path, today=date(2026, 10, 21)) is True
-    assert repo.uploads[("cv-assets", "packages/job-1.pdf")] == (b"%PDF-1.4 cv", "application/pdf")
-    assert repo.uploads[("cv-assets", "packages/job-1-anschreiben.pdf")][0] == b"%PDF-1.4 letter"
-    assert repo.packages["job-1"]["cv_pdf_path"] == "packages/job-1.pdf"
+    cv_key = "packages/job-1/Lebenslauf_Max_Mustermann.pdf"
+    letter_key = "packages/job-1/Anschreiben_Firma_Max_Mustermann.pdf"
+    assert repo.uploads[("cv-assets", cv_key)] == (b"%PDF-1.4 cv", "application/pdf")
+    assert repo.uploads[("cv-assets", letter_key)][0] == b"%PDF-1.4 letter"
+    assert repo.packages["job-1"]["cv_pdf_path"] == cv_key
+    assert repo.packages["job-1"]["letter_pdf_path"] == letter_key
     assert [u["purpose"] for u in repo.usage] == ["package", "package"]
     # CV first, then the cover letter, each under the name it will be sent with
     assert [name for name, _ in notifier.docs] == [

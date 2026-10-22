@@ -401,15 +401,17 @@ def run_package(
     notifier.send(format_gaps(result.gaps))
 
     # Persisting comes after delivery: the user gets the package even if storage fails.
-    stored_cv = f"packages/{job_id}.pdf"
+    stored_cv = f"packages/{job_id}/{cv_file.name}"
+    stored_letter = f"packages/{job_id}/{letter_file.name}"
     try:
-        repo.upload_asset(PHOTO_BUCKET, stored_cv, cv_pdf.read_bytes(), "application/pdf")
-        repo.upload_asset(
-            PHOTO_BUCKET, f"packages/{job_id}-anschreiben.pdf",
-            letter_pdf.read_bytes(), "application/pdf",
-        )
+        repo.upload_asset(PHOTO_BUCKET, stored_cv, cv_file.read_bytes(), "application/pdf")
+        repo.upload_asset(PHOTO_BUCKET, stored_letter, letter_file.read_bytes(), "application/pdf")
         repo.save_package(
-            job_id, cv_pdf_path=stored_cv, cover_letter=result.cover_letter, gaps=result.gaps
+            job_id,
+            cv_pdf_path=stored_cv,
+            letter_pdf_path=stored_letter,
+            cover_letter=result.cover_letter,
+            gaps=result.gaps,
         )
     except Exception as exc:
         result.warnings.append(f"Speichern in Supabase fehlgeschlagen ({type(exc).__name__})")

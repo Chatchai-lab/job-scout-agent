@@ -32,7 +32,13 @@ class Repo(Protocol):
     def download_asset(self, bucket: str, name: str) -> bytes: ...
     def upload_asset(self, bucket: str, path: str, data: bytes, content_type: str) -> None: ...
     def save_package(
-        self, job_id: str, *, cv_pdf_path: str, cover_letter: str, gaps: list[dict[str, str]]
+        self,
+        job_id: str,
+        *,
+        cv_pdf_path: str,
+        letter_pdf_path: str,
+        cover_letter: str,
+        gaps: list[dict[str, str]],
     ) -> None: ...
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         """One score row joined with its job (same shape as unnotified), or None."""
@@ -149,7 +155,13 @@ class SupabaseRepo:
         self._retry(lambda: self.db.storage.from_(bucket).upload(path, data, options))
 
     def save_package(
-        self, job_id: str, *, cv_pdf_path: str, cover_letter: str, gaps: list[dict[str, str]]
+        self,
+        job_id: str,
+        *,
+        cv_pdf_path: str,
+        letter_pdf_path: str,
+        cover_letter: str,
+        gaps: list[dict[str, str]],
     ) -> None:
         current = self._run(
             self.db.table("applications").select("status").eq("job_id", job_id).limit(1)
@@ -160,6 +172,7 @@ class SupabaseRepo:
             "job_id": job_id,
             "status": status if keep else "paket",
             "cv_pdf_path": cv_pdf_path,
+            "letter_pdf_path": letter_pdf_path,
             "cover_letter": cover_letter,
             "gaps": gaps,
             "updated_at": _now(),

@@ -78,9 +78,9 @@ class FakeRepo:
     def upload_asset(self, bucket, path, data, content_type):
         self.uploads[(bucket, path)] = (data, content_type)
 
-    def save_package(self, job_id, *, cv_pdf_path, cover_letter, gaps):
-        self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "cover_letter": cover_letter,
-                                 "gaps": gaps}
+    def save_package(self, job_id, *, cv_pdf_path, letter_pdf_path, cover_letter, gaps):
+        self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
+                                 "cover_letter": cover_letter, "gaps": gaps}
 
     def scored_job(self, job_id):
         by_id = {j["id"]: j for j in self.jobs}
