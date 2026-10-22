@@ -1,0 +1,26 @@
+name: Telegram Webhook
+
+on:
+  workflow_dispatch:
+
+jobs:
+  webhook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reset webhook and show its state
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          WEBHOOK_URL: https://job-scout-web-smoky.vercel.app/api/telegram
+        run: |
+          api="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
+          echo "deleteWebhook:"
+          curl -sS "$api/deleteWebhook"; echo
+          echo "setWebhook:"
+          curl -sS "$api/setWebhook" \
+            --data-urlencode "url=${WEBHOOK_URL}" \
+            --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
+            --data-urlencode 'allowed_updates=["message","callback_query"]'; echo
+          echo "getWebhookInfo:"
+          curl -sS "$api/getWebhookInfo"; echo
