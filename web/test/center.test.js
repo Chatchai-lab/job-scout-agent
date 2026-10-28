@@ -10,6 +10,7 @@ import {
   parseInitiativeRequest,
   sendName,
   sortApplications,
+  statusView,
 } from "../lib/applications.js";
 import { handleUpdate, makeDb, parseCallback } from "../lib/handler.js";
 
@@ -28,11 +29,12 @@ const app = (id, status, over = {}) => ({
   ...over,
 });
 
-function fakes({ apps = [], inits = [], bytes = new Uint8Array([1, 2, 3]) } = {}) {
+function fakes({ apps = [], inits = [], snapshot = null, bytes = new Uint8Array([1, 2, 3]) } = {}) {
   const calls = [];
   const db = {
     listApplications: async () => apps,
     listInitiatives: async () => inits,
+    statusSnapshot: async () => snapshot,
     getJob: async (id) => inits.find((j) => j.id === id) ?? null,
     createInitiative: async (company, context) => {
       calls.push(["createInitiative", company, context]);
@@ -224,4 +226,31 @@ test("/initiativ lists, a tap opens the card, and a message creates a new entry"
   assert.equal(await handleUpdate(callback("inis"), f), "initiatives");
   assert.equal(await handleUpdate(message("Initiativ Neue Firma: macht KI"), f), "initiative_created");
   assert.deepEqual(find(f.calls, "createInitiative"), ["createInitiative", "Neue Firma", "macht KI"]);
+});
+
+const SNAP = {
+  companies: 180,
+  openJobs: 9000,
+  initiatives: 12,
+  qualifying: 58,
+  unseen: 58,
+  statuses: { paket: 2, gemerkt: 1 },
+  costUsd: 0.75,
+  paused: true,
+};
+
+test("status view shows the counts, the budget share and the pause", () => {
+  const text = statusView(SNAP);
+  assert.ok(text.includes("Firmen aktiv: 180") && text.includes("Passende Stellen: 58"));
+  assert.ok(text.includes("📦 2") && text.includes("👀 1"));
+  assert.ok(text.includes("0.75 $ ≈ 0.69 € von 5 € (14 %)"));
+  assert.ok(text.includes("🔕 Benachrichtigungen pausiert"));
+  assert.ok(statusView({ ...SNAP, paused: false, statuses: {} }).includes("🔔 Benachrichtigungen aktiv"));
+  assert.ok(statusView({ ...SNAP, statuses: {} }).includes("Bewerbungen: keine"));
+});
+
+test("/status sends the snapshot", async () => {
+  const f = fakes({ snapshot: SNAP });
+  assert.equal(await handleUpdate(message("/status"), f), "status");
+  assert.ok(find(f.calls, "send")[1].includes("Job Scout – Status"));
 });

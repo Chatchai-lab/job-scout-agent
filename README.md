@@ -9,6 +9,7 @@ It never applies on its own. A human reads everything and sends the application.
 ```
  Public job-board APIs        GitHub Actions (Python)             Supabase
  Greenhouse · Lever · Ashby ─► triage  ─► digest        ─────►  Postgres + private Storage
+ Personio · Recruitee · SmartRecruiters · Workable · BambooHR
                               │  fetch → dedupe → prefilter        ▲
                               │  → LLM scoring → budget guard      │
                               ▼                                    │
@@ -18,12 +19,14 @@ It never applies on its own. A human reads everything and sends the application.
                               └─ package: LLM draft → fact check → LaTeX → PDFs
 ```
 
-1. **Triage (daily):** Fetch postings, drop duplicates, apply a hard prefilter, and score the rest.
-2. **Scoring:** Claude Haiku rates each posting as structured JSON: `fit` (tasks and tech vs. the profile), `reach` (seniority match), a role category, and a short reasoning with the main doubt.
-3. **Digest (daily):** Up to 7 jobs, ranked by fit × reach, one Telegram message each with action buttons. Strong matches are pushed immediately.
+1. **Triage (daily):** Fetch postings, drop duplicates, apply a hard prefilter, and score the rest. Postings that disappear from a company board in two polls in a row are marked closed and are no longer shown. Open applications ("Initiativbewerbung", "talent pool") are not scored; they are collected for the `/initiativ` list.
+2. **Scoring:** Claude Haiku rates each posting as structured JSON: `fit` (tasks and tech vs. the profile), `reach` (seniority match), a role category, and a short reasoning with the main doubt. A posting qualifies from fit 5 and reach 4. The scoring profile is the master profile from Supabase without contact data.
+3. **Digest (daily):** Up to 7 jobs, ranked by fit × reach, one Telegram message each with action buttons. Strong matches are pushed immediately. A switch in the database (`app_state.notifications_paused`) silences all scheduled messages; manual workflow runs still send, for testing.
 4. **Buttons:** Save, reject (with a one-tap reason) and undo. The decisions are stored for later preference learning.
 5. **Applications (`/bewerbungen`):** A list of everything saved or applied to, with a card per application: set the status (saved, package built, applied, interview, rejection, offer) and send the stored CV or cover letter again. The digest adds one line with the number of open applications and the age of the oldest.
-6. **Package (on demand):** Claude Sonnet selects and rephrases CV bullets and drafts the letter and gap analysis. A fact check then compares every claim with the profile before anything is rendered.
+6. **Initiative applications (`/initiativ`):** Companies with an open-application posting, one entry per company. You can also add any company by writing the bot "Initiativ Company" (optionally ": one sentence about the company"). The package for these has no job posting to match; the letter may only state what is in the profile and in the given company notes.
+7. **Status (`/status`):** Companies, open and qualifying postings, applications by status, monthly cost against the budget, and whether notifications are paused.
+8. **Package (on demand):** Claude Sonnet selects and rephrases CV bullets and drafts the letter and gap analysis. A fact check then compares every claim with the profile before anything is rendered.
 
 ## Design decisions
 
@@ -70,7 +73,7 @@ pytest && ruff check .
 
 **Companies.** List the companies and their job boards in `config/companies.yaml`, then load them with `job-scout seed-companies config/companies.yaml`.
 
-**GitHub secrets.** `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `PROFILE_YAML` (the scoring profile without contact data).
+**GitHub secrets.** `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET`. `PROFILE_YAML` is only a fallback: scoring reads the master profile from Supabase.
 
 **Button webhook.** Deploy `web/` to Vercel (root directory `web`) with `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` and `TELEGRAM_WEBHOOK_SECRET`, then register the function URL as the bot's webhook with the same secret token.
 
@@ -82,16 +85,18 @@ pytest && ruff check .
 | `job-scout digest` | Send the daily digest |
 | `job-scout package <job_id>` | Build and deliver the application package |
 | `job-scout resend <job_id>` | Send a stored job to Telegram again |
+| `job-scout discover` | Find job boards for the pending company candidates |
+| `job-scout maintenance <task>` | Run one allow-listed data fix (needs DELETE rights) |
 
 The `Telegram Webhook` workflow re-registers the bot webhook with the secrets stored in GitHub, so the token never has to be typed into a browser.
 
-The same commands run as GitHub Actions workflows: `triage` and `digest` on a daily schedule, `package` and `resend` manually with a job id. `ci` runs gitleaks, ruff and both test suites.
+The same commands run as GitHub Actions workflows: `triage` and `digest` on a daily schedule (GitHub often starts scheduled runs hours late, so the digest has no clock guard), `package` and `resend` manually with a job id, `discover` and `maintenance` manually. `ci` runs gitleaks, ruff and both test suites.
 
 ## Status
 
-Working: three job-board sources, prefilter, scoring with budget guard, digest and instant push, button actions with undo, application package with fact check and PDF output, and the application tracker in Telegram.
+Working: eight job-board sources, company discovery, prefilter, scoring with budget guard, closed-posting detection, digest and instant push, notification pause, button actions with undo, application package with fact check and PDF output, the application tracker with follow-up reminders after 14 days, initiative applications, and the status view in Telegram.
 
-Planned: follow-up reminders, more sources (Personio, Recruitee, SmartRecruiters, job aggregators), company discovery, a feedback loop that proposes preference rules from rejections (applied only after approval), a web dashboard.
+Planned: a feedback loop that proposes preference rules from rejections (applied only after approval), more sources for mid-sized companies (no public API found for Join; Softgarden unverified), a web dashboard.
 
 ## License
 

@@ -7,9 +7,12 @@ import {
   initiativeCard,
   initiativeListView,
   letterPath,
+  LIMITS,
+  NOT_FULL_TIME,
   listView,
   parseInitiativeRequest,
   sendName,
+  statusView,
 } from "./applications.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -154,6 +157,40 @@ export function makeDb(env, fetchFn) {
         });
       }
     },
+    async statusSnapshot() {
+      const count = async (path) => {
+        const res = await call(`${path}&limit=1`, { method: "GET", headers: { Prefer: "count=exact" } });
+        return Number((res.headers.get("content-range") ?? "").split("/")[1]) || 0;
+      };
+      const rows = async (path) => (await call(path, { method: "GET" })).json();
+      const month = `${new Date().toISOString().slice(0, 7)}-01`;
+      const [companies, openJobs, initiatives, scores, apps, cost, paused] = await Promise.all([
+        count("companies?active=eq.true&select=id"),
+        count("jobs?closed_at=is.null&kind=eq.posting&select=id"),
+        count("jobs?closed_at=is.null&kind=eq.initiative&select=id"),
+        rows(
+          "scores?select=notified_at,jobs!inner(title,closed_at)" +
+            `&fit=gte.${LIMITS.fit}&reach=gte.${LIMITS.reach}&ring=neq.raus` +
+            "&or=(start_ok.is.null,start_ok.eq.true)&jobs.closed_at=is.null&limit=1000",
+        ),
+        rows("applications?select=status"),
+        rows(`monthly_cost?select=cost_usd&month=eq.${month}`),
+        rows("app_state?select=value&key=eq.notifications_paused"),
+      ]);
+      const fits = scores.filter((s) => !NOT_FULL_TIME.test(s.jobs.title));
+      const statuses = {};
+      for (const a of apps) statuses[a.status] = (statuses[a.status] ?? 0) + 1;
+      return {
+        companies,
+        openJobs,
+        initiatives,
+        qualifying: fits.length,
+        unseen: fits.filter((s) => !s.notified_at).length,
+        statuses,
+        costUsd: Number(cost[0]?.cost_usd ?? 0),
+        paused: paused[0]?.value === "true",
+      };
+    },
     async listInitiatives() {
       const res = await call(
         "jobs?kind=eq.initiative&closed_at=is.null&select=id,company_name,location,url,description" +
@@ -272,6 +309,7 @@ export function makeTelegram(env, fetchFn) {
         commands: [
           { command: "bewerbungen", description: "Meine Bewerbungen" },
           { command: "initiativ", description: "Initiativbewerbungen" },
+          { command: "status", description: "Stand des Job Scouts" },
         ],
       }),
     setKeyboard: (chatId, messageId, markup) =>
@@ -294,6 +332,10 @@ async function handleMessage(message, { db, tg, chatId }) {
     const view = listView(await db.listApplications());
     await tg.send(chatId, view.text, view.markup);
     return "list";
+  }
+  if (command === "/status") {
+    await tg.send(chatId, statusView(await db.statusSnapshot()));
+    return "status";
   }
   if (command === "/initiativ") {
     const view = initiativeListView(await db.listInitiatives());

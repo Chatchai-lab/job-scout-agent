@@ -155,3 +155,28 @@ export function parseInitiativeRequest(text) {
   if (!name) return null;
   return { company: name, context: rest.join(":").trim().slice(0, 1500) };
 }
+
+// Mirrors config.py (fit_threshold, reach_threshold, monthly_budget_eur, eur_per_usd).
+export const LIMITS = { fit: 5, reach: 4, budgetEur: 5, eurPerUsd: 0.92 };
+export const NOT_FULL_TIME = /praktik|\bintern\b|internship|werkstudent|working student|thesis|abschlussarbeit|ausbildung|studierende/i;
+
+export function statusView(snap) {
+  const apps = ORDER.map((s) => [s, snap.statuses[s] ?? 0])
+    .filter(([, n]) => n > 0)
+    .map(([s, n]) => `${STATUS[s].icon} ${n}`)
+    .join(" · ");
+  const costEur = snap.costUsd * LIMITS.eurPerUsd;
+  const percent = Math.round((costEur / LIMITS.budgetEur) * 100);
+  return [
+    "📊 <b>Job Scout – Status</b>",
+    `🏢 Firmen aktiv: ${snap.companies}`,
+    `📄 Offene Stellen: ${snap.openJobs}`,
+    `✅ Passende Stellen: ${snap.qualifying} (noch nicht gesehen: ${snap.unseen})`,
+    `✉️ Initiativ-Firmen: ${snap.initiatives}`,
+    `📋 Bewerbungen: ${apps || "keine"}`,
+    `💶 Kosten im Monat: ${snap.costUsd.toFixed(2)} $ ≈ ${costEur.toFixed(2)} € von ${LIMITS.budgetEur} € (${percent} %)`,
+    snap.paused
+      ? "🔕 Benachrichtigungen pausiert (Digest und Sofort-Nachrichten still)"
+      : "🔔 Benachrichtigungen aktiv",
+  ].join("\n");
+}
