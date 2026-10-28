@@ -276,20 +276,26 @@ def test_bamboohr_fetch_reads_list_and_detail():
 
 @respx.mock
 def test_arbeitsagentur_search_returns_employers_from_the_postings():
-    base = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4"
-    route = respx.get(f"{base}/jobs").mock(
+    base = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc"
+    route = respx.get(f"{base}/v6/jobs").mock(
         return_value=httpx.Response(
             200,
-            json={"stellenangebote": [{
-                "refnr": "10001-ABC-S", "titel": "Werkstudent Softwareentwicklung (m/w/d)",
-                "arbeitgeber": "Beispiel Software GmbH", "arbeitsort": {"ort": "Pfungstadt"},
-                "aktuelleVeroeffentlichungsdatum": "2026-10-20",
+            json={"ergebnisliste": [{
+                "referenznummer": "10001-ABC-S",
+                "stellenangebotsart": "PRAKTIKUM_TRAINEE",
+                "stellenangebotsTitel": "Werkstudent Softwareentwicklung (m/w/d)",
+                "firma": "Beispiel Software GmbH",
+                "stellenlokationen": [{"adresse": {"ort": "Pfungstadt"}}],
+                "datumErsteVeroeffentlichung": "2026-10-20",
+            }, {
+                "referenznummer": "10001-AZUBI-S", "stellenangebotsart": "AUSBILDUNG",
+                "stellenangebotsTitel": "Fachinformatiker (m/w/d)", "firma": "Andere GmbH",
             }]},
         )
     )
-    respx.get(url__startswith=f"{base}/jobdetails/").mock(
+    respx.get(url__startswith=f"{base}/v4/jobdetails/").mock(
         return_value=httpx.Response(
-            200, json={"stellenbeschreibung": "<p>Python und <b>Cloud</b></p>"}
+            200, json={"stellenangebotsBeschreibung": "<p>Python und <b>Cloud</b></p>"}
         )
     )
     with httpx.Client() as client:
@@ -301,6 +307,8 @@ def test_arbeitsagentur_search_returns_employers_from_the_postings():
         "Werkstudent Informatik", "Darmstadt", "50",
     )
     assert route.calls.last.request.headers["X-API-Key"] == "jobboerse-jobsuche"
+    assert len(jobs) == 1
+    assert "angebotsart" not in params
     assert jobs[0].company_name == "Beispiel Software GmbH"
     assert jobs[0].location == "Pfungstadt, Deutschland"
     assert jobs[0].url.endswith("/10001-ABC-S")
