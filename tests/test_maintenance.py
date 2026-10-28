@@ -33,5 +33,5 @@ def test_only_unseen_open_recent_dev_jobs_with_low_fit_are_reset():
 def test_task_list_is_fixed():
     assert set(TASKS) == {
         "rescore-dev-jobs", "reprocess-working-students", "reprocess-outside-germany",
-        "reset-test-decisions", "reset-palantir-package",
+        "reset-test-decisions", "reset-palantir-package", "remove-duplicate-initiatives",
     }

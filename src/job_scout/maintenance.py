@@ -154,10 +154,33 @@ def reset_palantir_package(repo: SupabaseRepo) -> int:
     return len(ids)
 
 
+def remove_duplicate_initiatives(repo: SupabaseRepo) -> int:
+    """Keep the newest manual initiative per company and delete the older copies."""
+    db = repo.db
+    rows = repo._all(
+        lambda: db.table("jobs")
+        .select("id,company_name,first_seen_at")
+        .eq("kind", "initiative")
+        .eq("source", "manual"),
+    )
+    newest: dict[str, dict[str, Any]] = {}
+    stale: list[str] = []
+    for row in sorted(rows, key=lambda r: r["first_seen_at"], reverse=True):
+        key = row["company_name"].strip().lower()
+        if key in newest:
+            stale.append(row["id"])
+        else:
+            newest[key] = row
+    for start in range(0, len(stale), _BATCH):
+        repo._run(db.table("jobs").delete().in_("id", stale[start : start + _BATCH]))
+    return len(stale)
+
+
 TASKS = {
     "rescore-dev-jobs": rescore_dev_jobs,
     "reprocess-working-students": reprocess_working_students,
     "reprocess-outside-germany": reprocess_outside_germany,
     "reset-test-decisions": reset_test_decisions,
     "reset-palantir-package": reset_palantir_package,
+    "remove-duplicate-initiatives": remove_duplicate_initiatives,
 }

@@ -13,6 +13,7 @@ on:
           - reprocess-outside-germany
           - reset-test-decisions
           - reset-palantir-package
+          - remove-duplicate-initiatives
 
 jobs:
   maintenance:
