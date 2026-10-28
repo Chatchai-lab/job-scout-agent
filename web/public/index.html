@@ -63,6 +63,8 @@ select.sort { width: 100%; font-size: 15px; padding: 10px 12px; border-radius: 1
 .bar.over > span { background: var(--bad); }
 .empty, .error { color: var(--muted); text-align: center; padding: 28px 8px; }
 .error { color: var(--bad); }
+.badge.closed { background: var(--bad); color: #fff; }
+.card.is-closed { border-color: var(--bad); }
 .pill-new { color: var(--good); font-weight: 700; font-size: 12px; }
 nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom); }
@@ -163,9 +165,11 @@ function appCard(a) {
     h("div", { class: "company" }, a.company),
     h("div", { class: "title" }, a.title),
     h("div", { class: "meta" },
-      [a.appliedAt ? `Beworben ${date(a.appliedAt)}` : `Aktualisiert ${date(a.updatedAt)}`, a.hasPackage ? "📦 Paket" : "", a.closed ? "⚠️ Stelle geschlossen" : ""].filter(Boolean).join(" · ")),
+      a.closed ? [h("span", { class: "badge closed" }, "Stelle geschlossen"), " "] : null,
+      [a.appliedAt ? `Beworben ${date(a.appliedAt)}` : `Aktualisiert ${date(a.updatedAt)}`, a.hasPackage ? "📦 Paket" : ""].filter(Boolean).join(" · ")),
   ];
-  return h("div", { class: "card" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+  const card = h("div", { class: "card" + (a.closed ? " is-closed" : "") }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+  return card;
 }
 
 function renderApps() {
@@ -176,7 +180,9 @@ function renderApps() {
     return view;
   }
   const present = ORDER.filter((s) => applications.some((a) => a.status === s));
-  if (state.appFilter !== "all" && !present.includes(state.appFilter)) state.appFilter = "all";
+  const closedCount = applications.filter((a) => a.closed).length;
+  if (state.appFilter !== "all" && state.appFilter !== "closed" && !present.includes(state.appFilter)) state.appFilter = "all";
+  if (state.appFilter === "closed" && !closedCount) state.appFilter = "all";
   const chip = (key, label) => {
     const b = h("button", { class: "chip", type: "button", "aria-pressed": String(state.appFilter === key) }, label);
     b.addEventListener("click", () => { state.appFilter = key; render(); });
@@ -184,6 +190,7 @@ function renderApps() {
   };
   view.append(h("div", { class: "chips" },
     chip("all", `Alle ${applications.length}`),
+    closedCount ? chip("closed", `⚠️ Geschlossen ${closedCount}`) : null,
     present.map((s) => chip(s, `${statusLabels[s].icon} ${statusLabels[s].label} ${applications.filter((a) => a.status === s).length}`))));
   const sort = h("select", { "aria-label": "Sortierung", class: "sort" },
     h("option", { value: "status" }, "Sortieren: nach Status"),
@@ -193,7 +200,8 @@ function renderApps() {
   sort.addEventListener("change", () => { state.appSort = sort.value; render(); });
   view.append(sort);
 
-  const shown = applications.filter((a) => state.appFilter === "all" || a.status === state.appFilter);
+  const shown = applications.filter((a) =>
+    state.appFilter === "all" || (state.appFilter === "closed" ? a.closed : a.status === state.appFilter));
   if (state.appSort === "status" && state.appFilter === "all") {
     for (const status of present) {
       view.append(h("div", { class: "group" }, `${statusLabels[status].icon} ${statusLabels[status].label}`));

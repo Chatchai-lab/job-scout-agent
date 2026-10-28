@@ -29,14 +29,22 @@ def _parse_time(value: str | None) -> datetime | None:
         return None
 
 
+# Overlapping searches return the same postings; each posting's text is fetched once per run.
+_DESCRIPTIONS: dict[str, str] = {}
+
+
 def _description(client: httpx.Client, refnr: str) -> str:
+    if refnr in _DESCRIPTIONS:
+        return _DESCRIPTIONS[refnr]
     encoded = base64.b64encode(refnr.encode()).decode()
     try:
         response = client.get(f"{_DETAILS}/{encoded}", headers=_HEADERS, timeout=20)
         response.raise_for_status()
-        return _strip_html(response.json().get("stellenangebotsBeschreibung", ""))
+        text = _strip_html(response.json().get("stellenangebotsBeschreibung", ""))
     except (httpx.HTTPError, ValueError):
-        return ""  # title and place can still be scored
+        return ""  # title and place can still be scored; a failed fetch is tried again later
+    _DESCRIPTIONS[refnr] = text
+    return text
 
 
 def fetch(client: httpx.Client, company_name: str, slug: str) -> list[JobPosting]:

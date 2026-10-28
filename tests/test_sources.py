@@ -313,3 +313,30 @@ def test_arbeitsagentur_search_returns_employers_from_the_postings():
     assert jobs[0].location == "Pfungstadt, Deutschland"
     assert jobs[0].url.endswith("/10001-ABC-S")
     assert "Python und Cloud" in jobs[0].description
+
+
+@respx.mock
+def test_arbeitsagentur_posting_text_is_fetched_once_for_overlapping_searches():
+    from job_scout.sources import arbeitsagentur
+
+    arbeitsagentur._DESCRIPTIONS.clear()
+    base = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc"
+    respx.get(f"{base}/v6/jobs").mock(
+        return_value=httpx.Response(
+            200,
+            json={"ergebnisliste": [{
+                "referenznummer": "10001-DUP-S", "stellenangebotsart": "PRAKTIKUM_TRAINEE",
+                "stellenangebotsTitel": "Werkstudent IT (m/w/d)", "firma": "Beispiel GmbH",
+                "stellenlokationen": [{"adresse": {"ort": "Darmstadt"}}],
+            }]},
+        )
+    )
+    details = respx.get(url__startswith=f"{base}/v4/jobdetails/").mock(
+        return_value=httpx.Response(200, json={"stellenangebotsBeschreibung": "Python"})
+    )
+    with httpx.Client() as client:
+        first = fetch_for("arbeitsagentur", client, "A", "Werkstudent|Darmstadt|50")
+        second = fetch_for("arbeitsagentur", client, "B", "Werkstudent IT|Darmstadt|25")
+    assert first[0].description == second[0].description == "Python"
+    assert details.call_count == 1
+    arbeitsagentur._DESCRIPTIONS.clear()
