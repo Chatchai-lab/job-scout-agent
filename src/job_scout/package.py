@@ -136,16 +136,17 @@ belegte Fakten.
 - cover_letter: Deutsch, formell, 180 bis 230 Wörter. Beginnt mit \
 "Sehr geehrte Damen und Herren,", endet mit "Mit freundlichen Grüßen" und dem Namen aus dem \
 Profil. Nenne Firma und Stelle, 2 bis 3 belegte Gründe für die Passung, den frühesten Start \
-(März 2027) und den Bachelor-Abschluss im Februar 2027. Sei ehrlich bei Lücken (z. B. wenig \
-Berufserfahrung), ohne zu übertreiben. Keine Platzhalter wie [Name]. Nenne höchstens EIN Projekt \
-aus dem Profil in ein bis zwei Sätzen, nur als Beleg für etwas, das die Stelle verlangt, und nur \
-bei KI-, Automatisierungs- oder Engineering-Stellen. Der Brief handelt von der Firma und dem \
-Kandidaten, nicht von seinen Projekten.
+(März 2027) und den Bachelor-Abschluss im Februar 2027. Erfinde nichts und übertreibe nicht, \
+aber schreibe keine Einschränkungen über den Kandidaten \
+("meine Erfahrung ist noch begrenzt" o. ä.); Lücken gehören nur in gaps. Keine Platzhalter wie \
+[Name]. Nenne höchstens EIN Projekt aus dem Profil in ein bis zwei Sätzen, nur als Beleg für \
+etwas, das die Stelle verlangt, und nur bei KI-, Automatisierungs- oder Engineering-Stellen. \
+Der Brief handelt von der Firma und dem Kandidaten, nicht von seinen Projekten.
 - Bachelorarbeit: Hat ein Studiengang im Profil ein Feld "thesis", nenne das Thema im Anschreiben \
 nur bei Stellen mit KI-, LLM-, Daten-, Automatisierungs- oder Entwicklerbezug, in genau EINEM \
 Satz und nur als Thema ("In meiner Bachelorarbeit untersuche ich ..."). Keine Ergebnisse, keine \
 Betreuer, keine Modellnamen. Bei anderen Stellen lässt du sie im Anschreiben weg.
-- Master: Erwähne ein Masterstudium in Vollzeitbewerbungen nie.
+- Master: Erwähne ein Masterstudium in keinem Anschreiben, auch nicht als "geprüft".
 - Zeitform: Das heutige Datum steht in der Nachricht. Eine Station gilt nur als aktuell, wenn ihr \
 Ende "present" ist oder nach dem heutigen Datum liegt. Liegt das Ende davor, schreibe im Perfekt \
 oder Präteritum und nenne den Zeitraum ("bis Oktober 2026"), nie "aktuell" oder "derzeit".
@@ -181,8 +182,6 @@ Darmstadt, Abschluss Februar 2027) auf eine Teilzeitstelle. Abweichend von den R
 - cover_letter: Nenne statt des Vollzeitstarts im März 2027 die Verfügbarkeit aus \
 target.availability_werkstudent im Profil (Stunden pro Woche, Start). Erwähne das laufende \
 Studium und den Bezug der Stelle zum Studium. Erfinde keine Verfügbarkeit.
-- Master: Steht im Profil unter target.master "offen", darfst du in einem Halbsatz sagen, dass \
-ein anschließendes Masterstudium geprüft wird. Behaupte nie, dass er angestrebt oder geplant ist.
 - headline: "Informatikstudent (B.Sc.)" plus Fachgebiet der Stelle, höchstens 6 Wörter.
 - summary: erster Satz beginnt mit "Informatikstudent (B.Sc. …, Hochschule Darmstadt)".
 """
