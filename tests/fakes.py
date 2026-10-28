@@ -96,6 +96,14 @@ class FakeRepo:
     def package_job(self, job_id):
         return next((j for j in self.jobs if j["id"] == job_id), None)
 
+    def update_job(self, job_id, fields):
+        for job in self.jobs:
+            if job["id"] == job_id:
+                job.update(fields)
+
+    def delete_job(self, job_id):
+        self.jobs = [j for j in self.jobs if j["id"] != job_id]
+
     def get_state(self, key):
         return self.state.get(key)
 

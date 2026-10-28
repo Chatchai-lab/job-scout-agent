@@ -55,6 +55,12 @@ class Repo(Protocol):
     def package_job(self, job_id: str) -> dict[str, Any] | None:
         """One job row by id (scored or not), or None."""
         ...
+    def update_job(self, job_id: str, fields: dict[str, Any]) -> None:
+        """Set columns on one job row."""
+        ...
+    def delete_job(self, job_id: str) -> None:
+        """Remove one job row (and what hangs on it)."""
+        ...
     def job_presence(self) -> list[dict[str, Any]]:
         """id, company_id, source, external_id, missing_runs, closed_at of every stored job."""
         ...
@@ -217,6 +223,12 @@ class SupabaseRepo:
     def package_job(self, job_id: str) -> dict[str, Any] | None:
         rows = self._run(self.db.table("jobs").select("*").eq("id", job_id).limit(1)).data
         return rows[0] if rows else None
+
+    def update_job(self, job_id: str, fields: dict[str, Any]) -> None:
+        self._run(self.db.table("jobs").update(fields).eq("id", job_id))
+
+    def delete_job(self, job_id: str) -> None:
+        self._run(self.db.table("jobs").delete().eq("id", job_id))
 
     def get_state(self, key: str) -> str | None:
         rows = self._run(self.db.table("app_state").select("value").eq("key", key)).data

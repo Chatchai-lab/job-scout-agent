@@ -25,6 +25,7 @@ It never applies on its own. A human reads everything and sends the application.
 4. **Buttons:** Save, reject (with a one-tap reason) and undo. The decisions are stored for later preference learning.
 5. **Applications (`/bewerbungen`):** A list of everything saved or applied to, with a card per application: set the status (saved, package built, applied, interview, rejection, offer) and send the stored CV or cover letter again. The digest adds one line with the number of open applications and the age of the oldest.
 6. **Initiative applications (`/initiativ`):** Companies with an open-application posting, one entry per company. You can also add any company by writing the bot "Initiativ Company" (optionally ": one sentence about the company"). The package for these has no job posting to match; the letter may only state what is in the profile and in the given company notes.
+7. **Jobs found by hand:** Send the bot a link (or "Stelle Company: Title" plus the pasted ad text). The `import-job` workflow reads the page, scores it and sends the usual card with the package button. Pages behind a login cannot be read; paste the text instead.
 7. **Status (`/status`):** Companies, open and qualifying postings, applications by status, monthly cost against the budget, and whether notifications are paused.
 8. **Package (on demand):** Claude Sonnet selects and rephrases CV bullets and drafts the letter and gap analysis. A fact check then compares every claim with the profile before anything is rendered.
 

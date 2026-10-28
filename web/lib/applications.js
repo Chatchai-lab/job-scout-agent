@@ -156,6 +156,40 @@ export function parseInitiativeRequest(text) {
   return { company: name, context: rest.join(":").trim().slice(0, 1500) };
 }
 
+const URL_RE = /https?:\/\/[^\s<>"]+/i;
+
+// A job found by hand: a bare link, "Stelle <link>", or "Stelle Firma: Titel" plus the ad text.
+// Returns { url } | { company, title, description, url } | { help: true } | null.
+export function parseJobImport(text) {
+  const raw = String(text ?? "").trim();
+  if (/^https?:\/\/\S+$/i.test(raw)) return { url: raw.slice(0, 2000) };
+  const match = /^(?:stelle|job)\s+([\s\S]+)$/i.exec(raw);
+  if (!match) return null;
+  const body = match[1].trim();
+  if (/^https?:\/\/\S+$/i.test(body)) return { url: body.slice(0, 2000) };
+  const [head, ...rest] = body.split("\n");
+  const description = rest.join("\n").trim();
+  const colon = head.indexOf(":");
+  if (colon > 0 && description.length >= 80) {
+    const company = head.slice(0, colon).trim().slice(0, 80);
+    const title = head.slice(colon + 1).trim().slice(0, 200);
+    if (company && title) {
+      return {
+        company,
+        title,
+        description: description.slice(0, 12000),
+        url: (URL_RE.exec(description)?.[0] ?? "").slice(0, 2000),
+      };
+    }
+  }
+  return { help: true };
+}
+
+export const IMPORT_HELP =
+  "So schickst du mir eine Stelle:\n" +
+  "• Link: <code>Stelle https://…</code> (oder nur den Link)\n" +
+  "• Text: <code>Stelle Firma: Jobtitel</code> und darunter den kopierten Anzeigentext";
+
 // Mirrors config.py (fit_threshold, reach_threshold, monthly_budget_eur, eur_per_usd).
 export const LIMITS = { fit: 5, reach: 4, budgetEur: 5, eurPerUsd: 0.92 };
 export const NOT_FULL_TIME = /praktik|\bintern\b|internship|thesis|abschlussarbeit|ausbildung|studierende/i;

@@ -24,6 +24,8 @@ def main() -> None:
     resend.add_argument("job_id")
     maint = sub.add_parser("maintenance", help="Run an allow-listed data fix (needs DELETE)")
     maint.add_argument("task")
+    imp = sub.add_parser("import-job", help="Read, score and send a job posting added by hand")
+    imp.add_argument("job_id")
     pkg = sub.add_parser("package", help="Build the application package for one job")
     pkg.add_argument("job_id")
 
@@ -52,6 +54,12 @@ def main() -> None:
         from job_scout.runner import run_package_command
 
         run_package_command(args.job_id)
+        return
+
+    if args.command == "import-job":
+        from job_scout.runner import run_import_command
+
+        run_import_command(args.job_id)
         return
 
     if args.command == "digest":

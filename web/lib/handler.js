@@ -6,11 +6,13 @@ import {
   cardView,
   initiativeCard,
   initiativeListView,
+  IMPORT_HELP,
   letterPath,
   LIMITS,
   NOT_FULL_TIME,
   listView,
   parseInitiativeRequest,
+  parseJobImport,
   sendName,
   statusView,
 } from "./applications.js";
@@ -224,6 +226,33 @@ export function makeDb(env, fetchFn) {
       });
       return (await res.json())[0];
     },
+    async createImport({ url, company, title, description }) {
+      if (url && !description) {
+        const res = await call(
+          `jobs?source=eq.manual&kind=eq.posting&url=eq.${encodeURIComponent(url)}&select=id&limit=1`,
+          { method: "GET" },
+        );
+        const found = await res.json();
+        if (found.length) return found[0].id;
+      }
+      const id = globalThis.crypto.randomUUID();
+      const res = await call("jobs", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          source: "manual",
+          external_id: id,
+          company_name: company ?? "Link-Import",
+          title: title ?? "Stelle wird gelesen",
+          url: url ?? "",
+          description: description ?? null,
+          dedup_key: `manual|${id}`,
+          kind: "posting",
+          closed_at: new Date().toISOString(), // hidden from triage and digest until imported
+        }),
+      });
+      return (await res.json())[0].id;
+    },
     async downloadAsset(path) {
       const res = await fetchFn(`${env.SUPABASE_URL}/storage/v1/object/cv-assets/${encodeURI(path)}`, {
         headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
@@ -244,24 +273,26 @@ export function makeDb(env, fetchFn) {
 // Starts the "Package" workflow for one job. The token needs "Actions: write" on this repo only.
 export function makeGithub(env, fetchFn) {
   const repo = env.GITHUB_REPOSITORY || "Chatchai-lab/job-scout-agent";
+  const dispatch = async (workflow, jobId) => {
+    const res = await fetchFn(
+      `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ref: "main", inputs: { job_id: jobId } }),
+      },
+    );
+    if (res.status !== 204) throw new Error(`github dispatch -> ${res.status}`);
+  };
   return {
     configured: Boolean(env.GITHUB_DISPATCH_TOKEN),
-    async dispatchPackage(jobId) {
-      const res = await fetchFn(
-        `https://api.github.com/repos/${repo}/actions/workflows/package.yml/dispatches`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ ref: "main", inputs: { job_id: jobId } }),
-        },
-      );
-      if (res.status !== 204) throw new Error(`github dispatch -> ${res.status}`);
-    },
+    dispatchPackage: (jobId) => dispatch("package.yml", jobId),
+    dispatchImport: (jobId) => dispatch("import-job.yml", jobId),
   };
 }
 
@@ -317,14 +348,15 @@ export function makeTelegram(env, fetchFn) {
   };
 }
 
-async function handleMessage(message, { db, tg, chatId }) {
+async function handleMessage(message, { db, tg, gh, chatId }) {
   if (String(message.chat?.id) !== String(chatId)) return "wrong_chat";
   const command = String(message.text ?? "").trim().split(/[\s@]/)[0].toLowerCase();
   if (command === "/start") {
     await tg.setCommands();
     await tg.send(
       chatId,
-      "✅ Job Scout ist bereit.\nÖffne das Menü ☰ neben dem Eingabefeld und wähle „Meine Bewerbungen“.",
+      "✅ Job Scout ist bereit.\nÖffne das Menü ☰ neben dem Eingabefeld und wähle „Meine Bewerbungen“.\n" +
+        "Eine Stelle selbst gefunden? Schick mir den Link, ich lese sie und baue auf Wunsch das Paket.",
     );
     return "start";
   }
@@ -342,6 +374,26 @@ async function handleMessage(message, { db, tg, chatId }) {
     await tg.send(chatId, view.text, view.markup);
     return "initiatives";
   }
+  const entry = parseJobImport(message.text);
+  if (entry) {
+    if (entry.help) {
+      await tg.send(chatId, IMPORT_HELP);
+      return "import_help";
+    }
+    if (!gh?.configured) {
+      await tg.send(chatId, "❌ Der Import ist noch nicht eingerichtet (GitHub-Zugriff fehlt).");
+      return "import_unconfigured";
+    }
+    const jobId = await db.createImport(entry);
+    await tg.send(chatId, "⏳ Ich lese die Stelle. Das dauert etwa eine Minute.");
+    try {
+      await gh.dispatchImport(jobId);
+    } catch (err) {
+      await tg.send(chatId, "❌ Ich konnte den Import nicht starten. Bitte versuch es später noch einmal.");
+      throw err;
+    }
+    return "import_started";
+  }
   const request = parseInitiativeRequest(message.text);
   if (request) {
     const job = await db.createInitiative(request.company, request.context);
@@ -353,7 +405,7 @@ async function handleMessage(message, { db, tg, chatId }) {
 }
 
 export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new Date() }) {
-  if (update?.message) return handleMessage(update.message, { db, tg, chatId });
+  if (update?.message) return handleMessage(update.message, { db, tg, gh, chatId });
   const cq = update?.callback_query;
   if (!cq) return "ignored";
   if (String(cq.message?.chat?.id) !== String(chatId)) return "wrong_chat";

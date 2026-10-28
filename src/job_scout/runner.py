@@ -119,6 +119,36 @@ def run_package_command(job_id: str) -> None:
     print("Package sent.")
 
 
+def run_import_command(job_id: str) -> None:
+    from job_scout.importer import fetch_page, read_posting, run_import
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY must be set")
+    notifier = _notifier(settings)
+    if notifier is None:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
+    llm = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    repo = _repo(settings)
+    try:
+        with httpx.Client() as client:
+            outcome = run_import(
+                repo,
+                settings,
+                notifier,
+                job_id,
+                fetch_fn=lambda url: fetch_page(client, url),
+                read_fn=lambda text, url: read_posting(llm, settings.model_match, text, url),
+                score_fn=lambda system, job: score_job(llm, settings.model_match, system, job),
+                profile_text=_scoring_profile(settings, repo),
+            )
+    except Exception as exc:
+        detail = error_detail(exc)
+        notifier.send(f"🔗 Import fehlgeschlagen: {detail}")
+        raise SystemExit(f"import failed: {detail}") from None
+    print(f"Import: {outcome}.")
+
+
 def run_discover_command() -> None:
     from job_scout.discover import SupabaseCandidateStore, run_discover
 
