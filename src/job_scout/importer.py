@@ -217,7 +217,7 @@ def run_import(
             repo.delete_job(job_id)
             return "unreadable"
         read, usage = read_fn(text, row["url"])
-        _log_usage(repo, settings, "import", usage, cost_usd(settings.model_match, usage))
+        _log_usage(repo, settings, "match", usage, cost_usd(settings.model_match, usage))
         if not read.is_job_posting or not read.description.strip() or not read.title.strip():
             notifier.send("🔗 Das sieht nicht nach einer Stellenanzeige aus.\n" + HELP_UNREADABLE)
             repo.delete_job(job_id)

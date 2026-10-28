@@ -94,6 +94,9 @@ def error_detail(exc: Exception) -> str:
     the CV text must not reach the public Actions log."""
     if isinstance(exc, anthropic.APIStatusError):
         return f"{type(exc).__name__} {exc.status_code}: {str(exc.message)[:300]}"
+    code, message = getattr(exc, "code", None), getattr(exc, "message", None)
+    if code or message:  # database errors: code and the database's own message, no row content
+        return f"{type(exc).__name__} {code or ''}: {str(message or '')[:200]}".strip()
     return type(exc).__name__
 
 

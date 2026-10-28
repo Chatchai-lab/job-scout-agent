@@ -79,7 +79,8 @@ def test_link_is_read_scored_and_sent_with_buttons():
     assert job_id in repo.scores
     text, sent_id = notifier.sent[-1]
     assert sent_id == job_id and "Beispiel GmbH" in text and "Fit 7/10" in text
-    assert {u["purpose"] for u in repo.usage} == {"import", "match"}
+    # llm_usage only allows match, package and feedback as purpose
+    assert [u["purpose"] for u in repo.usage] == ["match", "match"]
 
 
 def test_pasted_text_skips_fetching_and_reading():
