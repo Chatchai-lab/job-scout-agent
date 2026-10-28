@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Job Scout</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Job Scout">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root {
+  --bg: #f1f5f9; --card: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0;
+  --accent: #0284c7; --accent-text: #ffffff; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
+  --chip: #e2e8f0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220; --card: #162033; --text: #e2e8f0; --muted: #94a3b8; --line: #243049;
+    --accent: #38bdf8; --accent-text: #0b1220; --good: #86efac; --warn: #fcd34d; --bad: #fca5a5;
+    --chip: #243049;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+body { padding: env(safe-area-inset-top) 0 calc(72px + env(safe-area-inset-bottom)); min-height: 100vh; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 14px 16px 8px; display: flex;
+  align-items: center; justify-content: space-between; gap: 8px; }
+h1 { font-size: 22px; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; }
+main { padding: 0 16px 16px; max-width: 640px; margin: 0 auto; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
+.card a { color: inherit; text-decoration: none; display: block; }
+.row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.company { font-weight: 650; }
+.title { color: var(--text); font-size: 15px; }
+.meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--chip); white-space: nowrap; }
+.badge.ws { background: var(--accent); color: var(--accent-text); }
+.score { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 0; background: var(--chip); color: var(--text); padding: 8px 14px; border-radius: 999px; font-size: 14px; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); font-weight: 650; }
+input[type=search], input[type=password] { width: 100%; font-size: 16px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card); color: var(--text); }
+button.primary { width: 100%; margin-top: 12px; font-size: 17px; font-weight: 650; padding: 13px; border: 0;
+  border-radius: 12px; background: var(--accent); color: var(--accent-text); }
+button.icon { border: 0; background: var(--chip); color: var(--text); border-radius: 999px; padding: 8px 14px; font-size: 14px; }
+select.sort { width: 100%; font-size: 15px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); margin-bottom: 2px; }
+.group { margin: 18px 0 4px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.bar { height: 10px; border-radius: 999px; background: var(--chip); overflow: hidden; margin-top: 8px; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.bar.over > span { background: var(--bad); }
+.empty, .error { color: var(--muted); text-align: center; padding: 28px 8px; }
+.error { color: var(--bad); }
+.pill-new { color: var(--good); font-weight: 700; font-size: 12px; }
+nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom); }
+nav button { flex: 1; border: 0; background: none; color: var(--muted); padding: 10px 0 8px; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+nav button span { font-size: 22px; line-height: 1; }
+nav button[aria-current="page"] { color: var(--accent); font-weight: 700; }
+#login { padding: 64px 24px; max-width: 420px; margin: 0 auto; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<section id="login" hidden>
+  <h1>Job Scout</h1>
+  <p class="sub">Bitte Passwort eingeben.</p>
+  <form id="login-form">
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Passwort" aria-label="Passwort" required>
+    <button class="primary" type="submit">Anmelden</button>
+  </form>
+  <p id="login-error" class="error" hidden></p>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <div><h1 id="head-title">Bewerbungen</h1><div class="sub" id="head-sub"></div></div>
+    <button class="icon" id="refresh" type="button">↻ Neu laden</button>
+  </header>
+  <main id="view"></main>
+  <nav>
+    <button data-tab="apps" aria-current="page"><span>📨</span>Bewerbungen</button>
+    <button data-tab="jobs"><span>🔎</span>Stellen</button>
+    <button data-tab="status"><span>📊</span>Status</button>
+  </nav>
+</div>
+
+<script>
+"use strict";
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+const ORDER = ["angebot", "interview", "beworben", "paket", "gemerkt", "absage"];
+const TITLES = { apps: "Bewerbungen", jobs: "Stellen", status: "Status" };
+const state = { data: null, tab: "apps", filter: "all", query: "", appFilter: "all", appSort: "status" };
+const $ = (id) => document.getElementById(id);
+
+function h(tag, attrs, ...kids) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v; else if (v !== false && v != null) node.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) node.append(kid);
+  return node;
+}
+const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : null);
+const date = (iso) => (iso ? new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
+
+async function load() {
+  const pw = store.get("pw");
+  if (!pw) return showLogin();
+  $("refresh").disabled = true;
+  try {
+    const res = await fetch("/api/dashboard", { headers: { "x-dashboard-password": pw }, cache: "no-store" });
+    if (res.status === 401) { store.del("pw"); return showLogin("Passwort falsch."); }
+    if (!res.ok) throw new Error(String(res.status));
+    state.data = await res.json();
+    $("login").hidden = true; $("app").hidden = false;
+    render();
+  } catch {
+    if (state.data) { render(); $("head-sub").textContent = "Offline – alte Daten"; }
+    else { $("app").hidden = false; $("login").hidden = true; $("view").replaceChildren(h("p", { class: "error" }, "Daten konnten nicht geladen werden. Bitte „Neu laden“ tippen.")); }
+  } finally { $("refresh").disabled = false; }
+}
+
+function showLogin(msg) {
+  $("app").hidden = true; $("login").hidden = false;
+  const err = $("login-error"); err.hidden = !msg; err.textContent = msg || "";
+}
+
+function jobCard(j) {
+  const link = safeUrl(j.url);
+  const body = [
+    h("div", { class: "row" },
+      h("div", {}, h("div", { class: "company" }, j.company), h("div", { class: "title" }, j.title)),
+      h("div", { class: "score" }, `${j.fit}/${j.reach}`)),
+    h("div", { class: "meta" },
+      j.kind === "working_student" ? h("span", { class: "badge ws" }, "Werkstudent") : null,
+      j.kind === "working_student" ? " " : "",
+      [j.location || (j.remote ? "Remote" : ""), j.ring ? `Ring: ${j.ring}` : ""].filter(Boolean).join(" · "),
+      !j.seen ? [" ", h("span", { class: "pill-new" }, "● neu")] : null),
+  ];
+  return h("div", { class: "card" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+}
+
+function appCard(a) {
+  const link = safeUrl(a.url);
+  const body = [
+    h("div", { class: "company" }, a.company),
+    h("div", { class: "title" }, a.title),
+    h("div", { class: "meta" },
+      [a.appliedAt ? `Beworben ${date(a.appliedAt)}` : `Aktualisiert ${date(a.updatedAt)}`, a.hasPackage ? "📦 Paket" : "", a.closed ? "⚠️ Stelle geschlossen" : ""].filter(Boolean).join(" · ")),
+  ];
+  return h("div", { class: "card" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+}
+
+function renderApps() {
+  const { applications, statusLabels } = state.data;
+  const view = h("div", {});
+  if (!applications.length) {
+    view.append(h("p", { class: "empty" }, "Noch keine Bewerbungen. Tippe in Telegram auf 👀 Merken oder 📦 Paket."));
+    return view;
+  }
+  const present = ORDER.filter((s) => applications.some((a) => a.status === s));
+  if (state.appFilter !== "all" && !present.includes(state.appFilter)) state.appFilter = "all";
+  const chip = (key, label) => {
+    const b = h("button", { class: "chip", type: "button", "aria-pressed": String(state.appFilter === key) }, label);
+    b.addEventListener("click", () => { state.appFilter = key; render(); });
+    return b;
+  };
+  view.append(h("div", { class: "chips" },
+    chip("all", `Alle ${applications.length}`),
+    present.map((s) => chip(s, `${statusLabels[s].icon} ${statusLabels[s].label} ${applications.filter((a) => a.status === s).length}`))));
+  const sort = h("select", { "aria-label": "Sortierung", class: "sort" },
+    h("option", { value: "status" }, "Sortieren: nach Status"),
+    h("option", { value: "recent" }, "Sortieren: zuletzt geändert"),
+    h("option", { value: "company" }, "Sortieren: Firma A–Z"));
+  sort.value = state.appSort;
+  sort.addEventListener("change", () => { state.appSort = sort.value; render(); });
+  view.append(sort);
+
+  const shown = applications.filter((a) => state.appFilter === "all" || a.status === state.appFilter);
+  if (state.appSort === "status" && state.appFilter === "all") {
+    for (const status of present) {
+      view.append(h("div", { class: "group" }, `${statusLabels[status].icon} ${statusLabels[status].label}`));
+      for (const a of shown.filter((x) => x.status === status)) view.append(appCard(a));
+    }
+    return view;
+  }
+  const sorted = [...shown].sort(state.appSort === "company"
+    ? (a, b) => a.company.localeCompare(b.company, "de")
+    : (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  for (const a of sorted) view.append(appCard(a));
+  return view;
+}
+
+function renderJobs() {
+  const d = state.data;
+  const view = h("div", {});
+  const filters = [["all", "Alle"], ["posting", "Vollzeit"], ["working_student", "Werkstudent"], ["new", "Neu"], ["initiative", "Initiativ"]];
+  view.append(h("div", { class: "chips" }, filters.map(([key, label]) => {
+    const b = h("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === key) }, label);
+    b.addEventListener("click", () => { state.filter = key; render(); });
+    return b;
+  })));
+  const search = h("input", { type: "search", placeholder: "Firma oder Titel suchen", "aria-label": "Suche", value: state.query });
+  search.addEventListener("input", () => { state.query = search.value; renderList(); });
+  view.append(search);
+  const list = h("div", {}); view.append(list);
+  function renderList() {
+    const q = state.query.trim().toLowerCase();
+    const match = (...parts) => !q || parts.join(" ").toLowerCase().includes(q);
+    let items;
+    if (state.filter === "initiative") {
+      items = d.initiatives.filter((i) => match(i.company, i.location)).map((i) => {
+        const link = safeUrl(i.url);
+        const body = [h("div", { class: "company" }, i.company), h("div", { class: "meta" }, i.location || "Initiativbewerbung")];
+        return h("div", { class: "card" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+      });
+    } else {
+      items = d.jobs.filter((j) => (state.filter === "all" || (state.filter === "new" ? !j.seen : j.kind === state.filter)) && match(j.company, j.title, j.location)).map(jobCard);
+    }
+    list.replaceChildren(...(items.length ? items : [h("p", { class: "empty" }, "Keine Treffer.")]));
+  }
+  renderList();
+  return view;
+}
+
+function renderStatus() {
+  const s = state.data.status;
+  const bar = h("div", { class: "bar" + (s.percent > 100 ? " over" : "") }, h("span", { style: `width:${Math.min(100, s.percent)}%` }));
+  const stat = (n, label) => h("div", { class: "stat" }, h("b", {}, String(n)), h("span", { class: "sub" }, label));
+  return h("div", {},
+    h("div", { class: "card" }, h("div", { class: "row" }, h("div", { class: "company" }, "API-Kosten diesen Monat"), h("div", { class: "score" }, `${s.costEur.toFixed(2)} € / ${s.budgetEur} €`)), bar,
+      h("div", { class: "meta" }, `${s.percent} % des Budgets (≈ ${s.costUsd.toFixed(2)} USD)`)),
+    h("div", { class: "stats" }, stat(s.qualifying, "passende Stellen"), stat(s.unseen, "davon neu"), stat(s.openJobs, "offene Stellen gesamt"), stat(s.companies, "aktive Firmen"), stat(s.initiatives, "Initiativ-Firmen"), stat(Object.values(s.statuses).reduce((a, b) => a + b, 0), "Bewerbungen")),
+    h("div", { class: "card" }, h("div", { class: "company" }, "Benachrichtigungen"), h("div", { class: "meta" }, s.paused ? "⏸ pausiert" : "✅ aktiv")),
+    h("p", { class: "sub" }, `Stand: ${new Date(state.data.generatedAt).toLocaleString("de-DE")}`));
+}
+
+function render() {
+  $("head-title").textContent = TITLES[state.tab];
+  const d = state.data;
+  $("head-sub").textContent = state.tab === "jobs" ? `${d.jobs.length} passende Stellen` : state.tab === "apps" ? `${d.applications.length} Einträge` : "";
+  document.querySelectorAll("nav button").forEach((b) => {
+    if (b.dataset.tab === state.tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  $("view").replaceChildren(state.tab === "apps" ? renderApps() : state.tab === "jobs" ? renderJobs() : renderStatus());
+}
+
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => { state.tab = b.dataset.tab; if (state.data) { render(); window.scrollTo(0, 0); } }));
+$("refresh").addEventListener("click", load);
+$("login-form").addEventListener("submit", (e) => { e.preventDefault(); store.set("pw", $("pw").value); $("pw").value = ""; load(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && store.get("pw")) load(); });
+load();
+</script>
+</body>
+</html>
