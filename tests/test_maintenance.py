@@ -34,4 +34,5 @@ def test_task_list_is_fixed():
     assert set(TASKS) == {
         "rescore-dev-jobs", "reprocess-working-students", "reprocess-outside-germany",
         "reset-test-decisions", "reset-palantir-package", "remove-duplicate-initiatives",
+        "reset-applications",
     }

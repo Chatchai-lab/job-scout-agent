@@ -14,6 +14,7 @@ on:
           - reset-test-decisions
           - reset-palantir-package
           - remove-duplicate-initiatives
+          - reset-applications
 
 jobs:
   maintenance:

@@ -176,6 +176,46 @@ def remove_duplicate_initiatives(repo: SupabaseRepo) -> int:
     return len(stale)
 
 
+def reset_applications(repo: SupabaseRepo) -> int:
+    """Start over before the real use: no applications, packages or decisions, and every
+    scored job counts as unseen again so the digest shows them anew.
+
+    Manual initiative entries go too; found postings, scores and the profile stay.
+    """
+    db = repo.db
+    apps = repo._all(
+        lambda: db.table("applications").select("job_id,cv_pdf_path,letter_pdf_path"),
+        key="job_id",
+    )
+    files = [p for a in apps for p in (a.get("cv_pdf_path"), a.get("letter_pdf_path")) if p]
+    for start in range(0, len(files), _BATCH):
+        try:
+            db.storage.from_("cv-assets").remove(files[start : start + _BATCH])
+        except Exception as exc:  # files are only clutter once the rows are gone
+            print(f"Storage cleanup skipped: {type(exc).__name__}")
+    app_ids = [a["job_id"] for a in apps]
+    for start in range(0, len(app_ids), _BATCH):
+        repo._run(db.table("applications").delete().in_("job_id", app_ids[start : start + _BATCH]))
+    decisions = repo._all(lambda: db.table("decisions").select("id"))
+    decision_ids = [d["id"] for d in decisions]
+    for start in range(0, len(decision_ids), _BATCH):
+        repo._run(db.table("decisions").delete().in_("id", decision_ids[start : start + _BATCH]))
+    initiatives = repo._all(
+        lambda: db.table("jobs").select("id").eq("kind", "initiative").eq("source", "manual"),
+    )
+    initiative_ids = [j["id"] for j in initiatives]
+    for start in range(0, len(initiative_ids), _BATCH):
+        repo._run(db.table("jobs").delete().in_("id", initiative_ids[start : start + _BATCH]))
+    seen = repo._all(
+        lambda: db.table("scores").select("job_id").not_.is_("notified_at", "null"), key="job_id"
+    )
+    seen_ids = [r["job_id"] for r in seen]
+    for start in range(0, len(seen_ids), _BATCH):
+        batch = seen_ids[start : start + _BATCH]
+        repo._run(db.table("scores").update({"notified_at": None}).in_("job_id", batch))
+    return len(app_ids) + len(decision_ids) + len(initiative_ids) + len(seen_ids)
+
+
 TASKS = {
     "rescore-dev-jobs": rescore_dev_jobs,
     "reprocess-working-students": reprocess_working_students,
@@ -183,4 +223,5 @@ TASKS = {
     "reset-test-decisions": reset_test_decisions,
     "reset-palantir-package": reset_palantir_package,
     "remove-duplicate-initiatives": remove_duplicate_initiatives,
+    "reset-applications": reset_applications,
 }
