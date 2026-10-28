@@ -1,0 +1,22 @@
+name: BA probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Try search endpoints
+        run: |
+          base=https://rest.arbeitsagentur.de/jobboerse/jobsuche-service
+          for path in pc/v6/jobs pc/v4/jobs pc/v4/app/jobs; do
+            for key in X-API-Key; do
+              echo "== $path"
+              curl -sS -m 30 -o body.txt -w "HTTP %{http_code}\n" \
+                -H "$key: jobboerse-jobsuche" -H "User-Agent: Jobsuche/2.9.2 (de.arbeitsagentur.jobboerse; build:1077; iOS 15.1.0) Alamofire/5.4.4" \
+                "$base/$path?was=Werkstudent%20Informatik&wo=Darmstadt&umkreis=50&size=3" || true
+              head -c 300 body.txt | tr -d '\n'; echo
+            done
+          done
