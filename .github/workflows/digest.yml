@@ -2,10 +2,9 @@ name: Digest
 
 on:
   schedule:
-    # Two UTC slots so 09:00 Berlin is hit in both summer (07:00) and winter (08:00);
-    # the guard step below lets only the right one through.
-    - cron: "0 7 * * *"
-    - cron: "0 8 * * *"
+    # One run a day, no clock guard: GitHub often starts scheduled runs hours late, and a guard
+    # on the local hour then skipped every digest. 06:00 UTC is 07:00/08:00 in Berlin.
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -17,26 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Only run at 09:00 Berlin time
-        id: guard
-        run: |
-          hour=$(TZ=Europe/Berlin date +%H)
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$hour" != "09" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/checkout@v4
-        if: steps.guard.outputs.run == 'true'
       - uses: actions/setup-python@v5
-        if: steps.guard.outputs.run == 'true'
         with:
           python-version: "3.12"
           cache: pip
-      - if: steps.guard.outputs.run == 'true'
-        run: pip install -e .
-      - if: steps.guard.outputs.run == 'true'
-        run: job-scout digest
+      - run: pip install -e .
+      - run: job-scout digest
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
