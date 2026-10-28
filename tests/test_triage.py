@@ -159,3 +159,28 @@ def test_empty_or_failed_board_closes_nothing():
     for _ in range(3):
         _run(repo, [], fetch=boom)
     assert _closed(repo) == {"1": None}
+
+
+def test_initiative_posting_is_listed_not_scored():
+    repo = FakeRepo([COMPANY])
+    calls = []
+
+    def score_fn(system, job):
+        calls.append(job)
+        return score(), usage()
+
+    stats = _run(repo, [posting(title="Initiativbewerbung (m/w/d)")], score_fn)
+    assert not calls and stats.scored == 0 and stats.initiatives == 1 and stats.dropped == 0
+    assert repo.jobs[0]["kind"] == "initiative"
+    assert list(repo.drops.values()) == ["initiative"]
+    # Run again: nothing new, nothing re-processed.
+    assert _run(repo, [posting(title="Initiativbewerbung (m/w/d)")], score_fn).initiatives == 0
+
+
+def test_foreign_or_student_initiative_is_dropped_normally():
+    repo = FakeRepo([COMPANY])
+    stats = _run(repo, [
+        posting(ext="1", title="Initiativbewerbung", location="London, UK"),
+        posting(ext="2", title="Initiativbewerbung (Studierende)"),
+    ])
+    assert stats.initiatives == 0 and stats.dropped == 2

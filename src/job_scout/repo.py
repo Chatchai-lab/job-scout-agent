@@ -49,6 +49,12 @@ class Repo(Protocol):
     def get_state(self, key: str) -> str | None:
         """Value of an app_state switch, or None if it is not set."""
         ...
+    def mark_initiative(self, job_ids: list[str]) -> None:
+        """Flag postings as open applications (kind = initiative)."""
+        ...
+    def package_job(self, job_id: str) -> dict[str, Any] | None:
+        """One job row by id (scored or not), or None."""
+        ...
     def job_presence(self) -> list[dict[str, Any]]:
         """id, company_id, source, external_id, missing_runs, closed_at of every stored job."""
         ...
@@ -202,6 +208,15 @@ class SupabaseRepo:
             self.db.table("scores").select("*, jobs(*)").eq("job_id", job_id).limit(1)
         ).data
         return rows[0] if rows and rows[0].get("jobs") else None
+
+    def mark_initiative(self, job_ids: list[str]) -> None:
+        for start in range(0, len(job_ids), _WRITE_BATCH):
+            batch = job_ids[start : start + _WRITE_BATCH]
+            self._run(self.db.table("jobs").update({"kind": "initiative"}).in_("id", batch))
+
+    def package_job(self, job_id: str) -> dict[str, Any] | None:
+        rows = self._run(self.db.table("jobs").select("*").eq("id", job_id).limit(1)).data
+        return rows[0] if rows else None
 
     def get_state(self, key: str) -> str | None:
         rows = self._run(self.db.table("app_state").select("value").eq("key", key)).data

@@ -1,7 +1,16 @@
 // Telegram button callbacks: 👀 save, ❌ reject (+ one-tap reason), 📦 package (later).
 // All state lives in Supabase; this function only writes `decisions` and edits the message.
 
-import { STATUS, cardView, letterPath, listView, sendName } from "./applications.js";
+import {
+  STATUS,
+  cardView,
+  initiativeCard,
+  initiativeListView,
+  letterPath,
+  listView,
+  parseInitiativeRequest,
+  sendName,
+} from "./applications.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -48,10 +57,11 @@ export function parseCallback(data) {
   const parts = String(data ?? "").split(":");
   if (parts[0] === "noop") return { kind: "noop" };
   if (parts[0] === "apps") return { kind: "apps" };
+  if (parts[0] === "inis") return { kind: "inis" };
   if (parts[0] === "st" && parts[1] in STATUS && UUID.test(parts[2] ?? "")) {
     return { kind: "st", status: parts[1], jobId: parts[2] };
   }
-  if (["pkg", "save", "rej", "undo", "app", "cv", "ltr"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
+  if (["pkg", "save", "rej", "undo", "app", "cv", "ltr", "ini"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
     return { kind: parts[0], jobId: parts[1] };
   }
   if (parts[0] === "why" && (parts[1] === "skip" || parts[1] in REASONS) && UUID.test(parts[2] ?? "")) {
@@ -144,6 +154,39 @@ export function makeDb(env, fetchFn) {
         });
       }
     },
+    async listInitiatives() {
+      const res = await call(
+        "jobs?kind=eq.initiative&closed_at=is.null&select=id,company_name,location,url,description" +
+          "&order=company_name.asc&limit=100",
+        { method: "GET" },
+      );
+      return res.json();
+    },
+    async getJob(jobId) {
+      const res = await call(
+        `jobs?id=eq.${jobId}&select=id,company_name,location,url,description,kind&limit=1`,
+        { method: "GET" },
+      );
+      return (await res.json())[0] ?? null;
+    },
+    async createInitiative(company, context) {
+      const id = globalThis.crypto.randomUUID();
+      const res = await call("jobs", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          source: "manual",
+          external_id: id,
+          company_name: company,
+          title: "Initiativbewerbung",
+          url: "",
+          description: context || null,
+          dedup_key: `manual|${id}`,
+          kind: "initiative",
+        }),
+      });
+      return (await res.json())[0];
+    },
     async downloadAsset(path) {
       const res = await fetchFn(`${env.SUPABASE_URL}/storage/v1/object/cv-assets/${encodeURI(path)}`, {
         headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
@@ -226,7 +269,10 @@ export function makeTelegram(env, fetchFn) {
     },
     setCommands: () =>
       call("setMyCommands", {
-        commands: [{ command: "bewerbungen", description: "Meine Bewerbungen" }],
+        commands: [
+          { command: "bewerbungen", description: "Meine Bewerbungen" },
+          { command: "initiativ", description: "Initiativbewerbungen" },
+        ],
       }),
     setKeyboard: (chatId, messageId, markup) =>
       call("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: markup }),
@@ -248,6 +294,18 @@ async function handleMessage(message, { db, tg, chatId }) {
     const view = listView(await db.listApplications());
     await tg.send(chatId, view.text, view.markup);
     return "list";
+  }
+  if (command === "/initiativ") {
+    const view = initiativeListView(await db.listInitiatives());
+    await tg.send(chatId, view.text, view.markup);
+    return "initiatives";
+  }
+  const request = parseInitiativeRequest(message.text);
+  if (request) {
+    const job = await db.createInitiative(request.company, request.context);
+    const view = initiativeCard(job);
+    await tg.send(chatId, view.text, view.markup);
+    return "initiative_created";
   }
   return "ignored";
 }
@@ -291,6 +349,23 @@ export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new
       await tg.edit(msg.chat.id, msg.message_id, view.text, view.markup);
       await tg.answer(cq.id, "");
       return "list";
+    }
+    case "inis": {
+      const view = initiativeListView(await db.listInitiatives());
+      await tg.edit(msg.chat.id, msg.message_id, view.text, view.markup);
+      await tg.answer(cq.id, "");
+      return "initiatives";
+    }
+    case "ini": {
+      const job = await db.getJob(cmd.jobId);
+      if (!job) {
+        await tg.answer(cq.id, "Diese Firma gibt es nicht mehr.", true);
+        return "initiative_missing";
+      }
+      const view = initiativeCard(job);
+      await tg.edit(msg.chat.id, msg.message_id, view.text, view.markup);
+      await tg.answer(cq.id, "");
+      return "initiative_card";
     }
     case "app":
     case "st": {

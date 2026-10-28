@@ -287,3 +287,24 @@ def test_warning_lists_at_most_three_letter_problems():
     ]
     result, _ = _create([_draft(), _draft()], [flags, flags])
     assert len([w for w in result.warnings if w.startswith("Anschreiben")]) == MAX_WARNING_ISSUES
+
+
+def test_initiative_job_text_asks_for_a_company_neutral_letter():
+    from job_scout.package import job_text
+
+    text = job_text({"company_name": "Beispiel AG", "title": "Initiativbewerbung", "url": "",
+                     "kind": "initiative", "description": "Softwarehaus in Bonn."})
+    assert "INITIATIVBEWERBUNG" in text and "Beispiel AG" in text
+    assert "Softwarehaus in Bonn." in text
+    assert "NICHTS über die Firma" in text
+
+
+def test_package_can_be_built_for_an_unscored_initiative_job():
+    from job_scout.package import run_package  # noqa: F401  (import check)
+
+    repo = FakeRepo()
+    repo.insert_jobs([{"source": "manual", "external_id": "x", "company_name": "Beispiel AG",
+                       "title": "Initiativbewerbung", "url": "", "dedup_key": "manual|x",
+                       "kind": "initiative"}])
+    assert repo.package_job("job-1")["kind"] == "initiative"
+    assert repo.package_job("missing") is None

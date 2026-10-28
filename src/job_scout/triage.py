@@ -14,7 +14,7 @@ import httpx
 from job_scout.config import Settings
 from job_scout.models import JobPosting
 from job_scout.notify import Notifier, format_job
-from job_scout.prefilter import prefilter
+from job_scout.prefilter import INITIATIVE_TITLE, prefilter
 from job_scout.pricing import cost_usd
 from job_scout.repo import Repo
 from job_scout.scoring import ScoreResult, build_system
@@ -34,6 +34,7 @@ class TriageStats:
     new_jobs: int = 0
     dropped: int = 0
     closed_jobs: int = 0
+    initiatives: int = 0
     scored: int = 0
     score_errors: int = 0
     instant_pushed: int = 0
@@ -148,11 +149,17 @@ def score_pending(
     spent = repo.month_cost_usd()
     results: list[tuple[dict[str, Any], dict[str, Any]]] = []
     drops: list[dict[str, Any]] = []
+    initiative_ids: list[str] = []
 
     for row in repo.unscored_jobs():
         reason = prefilter(posting_from_row(row), include_abroad=settings.include_abroad)
         if reason:
             drops.append({"job_id": row["id"], "reason": str(reason)})
+            continue
+        if INITIATIVE_TITLE.search(row["title"] or ""):
+            # An open application has nothing to score; /initiativ lists it instead.
+            drops.append({"job_id": row["id"], "reason": "initiative"})
+            initiative_ids.append(row["id"])
             continue
         if spent >= budget_usd:
             stats.budget_stopped = True
@@ -187,7 +194,9 @@ def score_pending(
         results.append((row, score_row))
 
     repo.insert_drops(drops)
-    stats.dropped = len(drops)
+    repo.mark_initiative(initiative_ids)
+    stats.dropped = len(drops) - len(initiative_ids)
+    stats.initiatives = len(initiative_ids)
     return results
 
 

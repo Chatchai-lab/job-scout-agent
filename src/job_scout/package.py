@@ -153,8 +153,27 @@ def build_draft_system(profile_text: str) -> str:
     return INSTRUCTIONS + "\n\n## Profil (einzige Faktenquelle)\n" + profile_text
 
 
+INITIATIVE_NOTE = """\
+INITIATIVBEWERBUNG: Es gibt keine ausgeschriebene Stelle. Der Kandidat bewirbt sich aus eigener \
+Initiative bei der Firma unten.
+- Zielrolle: Wähle aus target.roles im Profil die Rolle, die zu den Angaben zur Firma und zum \
+Profil am besten passt. headline und summary nutzen diese Rolle ("Angehender <Rolle>").
+- cover_letter: Betreff-Gedanke "Initiativbewerbung als <Rolle>". Nenne die Firma, aber behaupte \
+NICHTS über die Firma, das nicht in den Angaben unten steht (keine Produkte, Kunden, Werte oder \
+Projekte erfinden). Nenne 2 bis 3 belegte Gründe aus dem Profil, warum der Kandidat für diese \
+Rolle passt, und frage nach einem Gespräch. Frühester Start März 2027.
+- gaps: 4 bis 8 typische Anforderungen der Zielrolle (nicht der Firma) mit Status und Begründung \
+aus dem Profil."""
+
+
 def job_text(job: dict[str, Any]) -> str:
     description = (job.get("description") or "")[:MAX_DESCRIPTION_CHARS]
+    if job.get("kind") == "initiative":
+        return (
+            INITIATIVE_NOTE + "\n\n"
+            f"Firma: {job['company_name']}\nAnzeige/Link: {job.get('url') or '(keiner)'}\n"
+            f"Angaben zur Firma:\n{description or '(keine, schreibe allgemein)'}"
+        )
     return (
         f"Firma: {job['company_name']}\nTitel: {job['title']}\n"
         f"Ort: {job.get('location') or 'unbekannt'}\nLink: {job['url']}\n\n"
@@ -356,15 +375,14 @@ def run_package(
     today: date | None = None,
 ) -> bool:
     """Build and deliver the package for one job. Returns False if the job is unknown."""
-    row = repo.scored_job(job_id)
-    if row is None:
+    job = repo.package_job(job_id)
+    if job is None:
         notifier.send("📦 Paket: Diese Stelle ist nicht bekannt.")
         return False
     profile_text = repo.private_profile()
     if not profile_text:
         raise RuntimeError("profile_private has no row 'main'")
     profile = yaml.safe_load(profile_text)
-    job = row["jobs"]
 
     result = create_package(client, settings, profile_text, job)
     # Log the spend right away: a later failure must not hide what the API calls cost.

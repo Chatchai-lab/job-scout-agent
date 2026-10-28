@@ -36,7 +36,15 @@ EXCLUDED_TITLE = re.compile(
     r"\bwriter\b|mechanical|electrical|electronic|hardware|mechatronic|optical|camera|"
     r"manufacturing|propulsion|structural|\brf\b|"
     r"praktik|\bintern\b|internship|werkstudent|working student|\bthesis\b|abschlussarbeit|"
-    r"bachelorarbeit|masterarbeit|ausbildung|apprentice|duales studium",
+    r"bachelorarbeit|masterarbeit|ausbildung|apprentice|duales studium|studierende|studenten",
+    re.IGNORECASE,
+)
+
+# Open applications without a concrete role. They skip the "looks like a developer role" test
+# and are collected for the /initiativ list instead of being scored.
+INITIATIVE_TITLE = re.compile(
+    r"initiativ|spontan|open application|general application|talent pool|talent community|"
+    r"talent wanted|join our (?:talent|team)|bewerberpool|blind application",
     re.IGNORECASE,
 )
 
@@ -105,7 +113,11 @@ def prefilter(job: JobPosting, *, include_abroad: bool = False) -> DropReason | 
 
     if EXCLUDED_TITLE.search(title):
         return DropReason("title_excluded")
-    if not (TITLE_KEYWORDS.search(title) or DEV_TITLE.search(title)):
+    if not (
+        TITLE_KEYWORDS.search(title)
+        or DEV_TITLE.search(title)
+        or INITIATIVE_TITLE.search(title)
+    ):
         return DropReason("title_not_dev")
 
     if not include_abroad:

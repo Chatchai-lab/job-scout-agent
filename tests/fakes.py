@@ -88,6 +88,14 @@ class FakeRepo:
         self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
                                  "cover_letter": cover_letter, "gaps": gaps}
 
+    def mark_initiative(self, job_ids):
+        for job in self.jobs:
+            if job["id"] in job_ids:
+                job["kind"] = "initiative"
+
+    def package_job(self, job_id):
+        return next((j for j in self.jobs if j["id"] == job_id), None)
+
     def get_state(self, key):
         return self.state.get(key)
 

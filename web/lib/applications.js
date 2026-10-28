@@ -109,3 +109,49 @@ export function sendName(path, kind) {
   }
   return base;
 }
+
+export function initiativeListView(allJobs) {
+  const seen = new Set(); // several open-application postings per company show up once
+  const jobs = allJobs.filter((j) => !seen.has(j.company_name.trim()) && seen.add(j.company_name.trim()));
+  if (!jobs.length) {
+    return {
+      text: "✉️ Noch keine Initiativ-Anzeigen. Schreibe mir „Initiativ Firmenname“, um selbst eine anzulegen.",
+      markup: { inline_keyboard: [] },
+    };
+  }
+  const rows = jobs.slice(0, MAX_ROWS).map((j) => [
+    {
+      text: `✉️ ${short(j.company_name.trim(), 30)}${j.location ? ` · ${short(j.location, 22)}` : ""}`,
+      callback_data: `ini:${j.id}`,
+    },
+  ]);
+  return {
+    text:
+      `✉️ <b>Initiativbewerbungen</b> (${jobs.length})\nFirmen, die Initiativbewerbungen annehmen.\n` +
+      "Tippe auf eine Firma. Eigene Firma anlegen: „Initiativ Firmenname“ oder " +
+      "„Initiativ Firmenname: ein Satz, was die Firma macht“.",
+    markup: { inline_keyboard: rows },
+  };
+}
+
+export function initiativeCard(job) {
+  const lines = [`✉️ <b>Initiativbewerbung</b>`, esc(job.company_name.trim())];
+  if (job.location) lines.push(`📍 ${esc(job.location)}`);
+  if (job.description) lines.push("", esc(short(job.description.trim(), 400)));
+  const rows = [[{ text: "📦 Paket", callback_data: `pkg:${job.id}` }]];
+  const links = [];
+  if (/^https?:\/\//.test(job.url ?? "")) links.push({ text: "🔗 Seite", url: job.url });
+  links.push({ text: "⬅️ Liste", callback_data: "inis" });
+  rows.push(links);
+  return { text: lines.join("\n"), markup: { inline_keyboard: rows } };
+}
+
+// "Initiativ Firma" or "Initiativ Firma: Kontext" -> { company, context }, or null.
+export function parseInitiativeRequest(text) {
+  const match = /^initiativ(?:bewerbung)?\s+(.+)$/is.exec(String(text ?? "").trim());
+  if (!match) return null;
+  const [company, ...rest] = match[1].split(":");
+  const name = company.trim().slice(0, 80);
+  if (!name) return null;
+  return { company: name, context: rest.join(":").trim().slice(0, 1500) };
+}

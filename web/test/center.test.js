@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardView, letterPath, listView, sendName, sortApplications } from "../lib/applications.js";
+import {
+  cardView,
+  initiativeCard,
+  initiativeListView,
+  letterPath,
+  listView,
+  parseInitiativeRequest,
+  sendName,
+  sortApplications,
+} from "../lib/applications.js";
 import { handleUpdate, makeDb, parseCallback } from "../lib/handler.js";
 
 const A = "123e4567-e89b-42d3-a456-426614174001";
@@ -19,10 +28,16 @@ const app = (id, status, over = {}) => ({
   ...over,
 });
 
-function fakes({ apps = [], bytes = new Uint8Array([1, 2, 3]) } = {}) {
+function fakes({ apps = [], inits = [], bytes = new Uint8Array([1, 2, 3]) } = {}) {
   const calls = [];
   const db = {
     listApplications: async () => apps,
+    listInitiatives: async () => inits,
+    getJob: async (id) => inits.find((j) => j.id === id) ?? null,
+    createInitiative: async (company, context) => {
+      calls.push(["createInitiative", company, context]);
+      return { id: A, company_name: company, location: null, url: "", description: context || null };
+    },
     getApplication: async (id) => apps.find((a) => a.job_id === id) ?? null,
     setStatus: async (id, status) => {
       calls.push(["setStatus", id, status]);
@@ -166,4 +181,47 @@ test("makeDb status update clears or sets the application date", async () => {
   await db.setStatus(A, "paket");
   assert.equal(seen.length, 1);
   assert.equal(JSON.parse(seen[0][2]).applied_at, null);
+});
+
+const init = (id, over = {}) => ({
+  id,
+  company_name: "Beispiel <GmbH>",
+  location: "München",
+  url: "https://example.com/karriere",
+  description: "Softwarehaus & Beratung",
+  ...over,
+});
+
+test("initiative requests are parsed from plain messages", () => {
+  assert.deepEqual(parseInitiativeRequest("Initiativ Mayflower"), { company: "Mayflower", context: "" });
+  assert.deepEqual(parseInitiativeRequest("initiativ Mayflower: KI-Beratung in Karlsruhe"), {
+    company: "Mayflower",
+    context: "KI-Beratung in Karlsruhe",
+  });
+  assert.equal(parseInitiativeRequest("Initiativ"), null);
+  assert.equal(parseInitiativeRequest("Hallo"), null);
+});
+
+test("initiative list and card escape text and offer the package button", () => {
+  const view = initiativeListView([init(A)]);
+  assert.equal(view.markup.inline_keyboard[0][0].callback_data, `ini:${A}`);
+  assert.ok(initiativeListView([]).text.includes("Noch keine Initiativ-Anzeigen"));
+  assert.equal(initiativeListView([init(A), init(B)]).markup.inline_keyboard.length, 1);  // same company once
+  const card = initiativeCard(init(A));
+  assert.ok(card.text.includes("Beispiel &lt;GmbH&gt;") && card.text.includes("Softwarehaus &amp; Beratung"));
+  const buttons = card.markup.inline_keyboard.flat();
+  assert.ok(buttons.some((b) => b.callback_data === `pkg:${A}`));
+  assert.ok(buttons.some((b) => b.callback_data === "inis"));
+  const noUrl = initiativeCard(init(A, { url: "" })).markup.inline_keyboard.flat();
+  assert.ok(!noUrl.some((b) => b.url));
+});
+
+test("/initiativ lists, a tap opens the card, and a message creates a new entry", async () => {
+  const f = fakes({ inits: [init(A)] });
+  assert.equal(await handleUpdate(message("/initiativ"), f), "initiatives");
+  assert.equal(await handleUpdate(callback(`ini:${A}`), f), "initiative_card");
+  assert.equal(await handleUpdate(callback(`ini:${B}`), f), "initiative_missing");
+  assert.equal(await handleUpdate(callback("inis"), f), "initiatives");
+  assert.equal(await handleUpdate(message("Initiativ Neue Firma: macht KI"), f), "initiative_created");
+  assert.deepEqual(find(f.calls, "createInitiative"), ["createInitiative", "Neue Firma", "macht KI"]);
 });
