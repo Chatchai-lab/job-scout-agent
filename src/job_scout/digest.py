@@ -7,7 +7,7 @@ from typing import Any
 from job_scout.config import Settings
 from job_scout.notify import Notifier, format_job
 from job_scout.prefilter import prefilter
-from job_scout.repo import Repo
+from job_scout.repo import NOTIFICATIONS_PAUSED, Repo
 from job_scout.triage import posting_from_row, qualifies
 
 
@@ -76,8 +76,20 @@ def send_reminders(repo: Repo, settings: Settings, notifier: Notifier) -> int:
     return len(due)
 
 
-def run_digest(repo: Repo, settings: Settings, notifier: Notifier) -> int:
-    """Send the digest. Only sent jobs are marked; qualifying overflow stays for tomorrow."""
+def notifications_paused(repo: Repo) -> bool:
+    return repo.get_state(NOTIFICATIONS_PAUSED) == "true"
+
+
+def run_digest(
+    repo: Repo, settings: Settings, notifier: Notifier, *, ignore_pause: bool = False
+) -> int:
+    """Send the digest. Only sent jobs are marked; qualifying overflow stays for tomorrow.
+
+    While notifications are paused nothing is sent or marked, unless `ignore_pause` is set
+    (manual test runs).
+    """
+    if not ignore_pause and notifications_paused(repo):
+        return 0
     rows = repo.unnotified()
     chosen = select_digest(rows, settings)
     open_line = open_applications_line(repo.open_applications())

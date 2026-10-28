@@ -24,6 +24,7 @@ class FakeRepo:
         self.uploads: dict[tuple[str, str], tuple[bytes, str]] = {}
         self.packages: dict[str, dict[str, Any]] = {}
         self.applications: list[dict[str, Any]] = []
+        self.state: dict[str, str] = {}
 
     def active_companies(self):
         return self.companies
@@ -86,6 +87,9 @@ class FakeRepo:
     def save_package(self, job_id, *, cv_pdf_path, letter_pdf_path, cover_letter, gaps):
         self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
                                  "cover_letter": cover_letter, "gaps": gaps}
+
+    def get_state(self, key):
+        return self.state.get(key)
 
     def job_presence(self):
         return [

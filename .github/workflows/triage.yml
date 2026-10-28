@@ -29,6 +29,10 @@ jobs:
         run: |
           args=""
           if [ "${{ inputs.notify }}" = "false" ]; then args="--no-notify"; fi
+          # Manual runs are for testing, so they ignore the notification pause.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            args="$args --ignore-pause"
+          fi
           job-scout triage $args
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

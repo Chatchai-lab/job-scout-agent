@@ -46,6 +46,9 @@ class Repo(Protocol):
     def open_applications(self) -> list[dict[str, Any]]:
         """Applications still waiting for an answer (status beworben or interview)."""
         ...
+    def get_state(self, key: str) -> str | None:
+        """Value of an app_state switch, or None if it is not set."""
+        ...
     def job_presence(self) -> list[dict[str, Any]]:
         """id, company_id, source, external_id, missing_runs, closed_at of every stored job."""
         ...
@@ -54,6 +57,8 @@ class Repo(Protocol):
     ) -> None: ...
     def mark_reminded(self, job_ids: list[str]) -> None: ...
 
+
+NOTIFICATIONS_PAUSED = "notifications_paused"
 
 _PAGE = 1000
 _RETRIES = 3  # extra attempts after a dropped connection (idle HTTP/2 links get closed)
@@ -197,6 +202,10 @@ class SupabaseRepo:
             self.db.table("scores").select("*, jobs(*)").eq("job_id", job_id).limit(1)
         ).data
         return rows[0] if rows and rows[0].get("jobs") else None
+
+    def get_state(self, key: str) -> str | None:
+        rows = self._run(self.db.table("app_state").select("value").eq("key", key)).data
+        return rows[0]["value"] if rows else None
 
     def job_presence(self) -> list[dict[str, Any]]:
         columns = "id,company_id,source,external_id,missing_runs,closed_at"

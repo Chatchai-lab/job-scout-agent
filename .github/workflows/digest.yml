@@ -22,7 +22,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e .
-      - run: job-scout digest
+      - name: Send digest
+        # Manual runs are for testing, so they ignore the notification pause.
+        run: job-scout digest ${{ github.event_name == 'workflow_dispatch' && '--ignore-pause' || '' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

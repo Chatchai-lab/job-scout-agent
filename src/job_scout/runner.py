@@ -8,7 +8,7 @@ import anthropic
 import httpx
 
 from job_scout.config import Settings, get_settings
-from job_scout.digest import resend_job, run_digest
+from job_scout.digest import notifications_paused, resend_job, run_digest
 from job_scout.notify import TelegramNotifier
 from job_scout.package import run_package
 from job_scout.pdfbuild import build_pdf
@@ -37,17 +37,20 @@ def _notifier(settings: Settings) -> TelegramNotifier | None:
     return None
 
 
-def run_triage_command(notify: bool = True) -> None:
+def run_triage_command(notify: bool = True, ignore_pause: bool = False) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY must be set")
     llm = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    repo = _repo(settings)
     notifier = _notifier(settings) if notify else None
+    if notifier is not None and not ignore_pause and notifications_paused(repo):
+        notifier = None
+        print("Notifications are paused (app_state).")
     if notifier is None:
         print("Running without Telegram notifications.")
 
-    repo = _repo(settings)
     with httpx.Client(headers={"User-Agent": "job-scout-agent"}) as client:
         stats = run_triage(
             repo,
@@ -63,12 +66,16 @@ def run_triage_command(notify: bool = True) -> None:
         raise SystemExit("every company fetch failed")
 
 
-def run_digest_command() -> None:
+def run_digest_command(ignore_pause: bool = False) -> None:
     settings = get_settings()
     notifier = _notifier(settings)
     if notifier is None:
         raise RuntimeError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
-    sent = run_digest(_repo(settings), settings, notifier)
+    repo = _repo(settings)
+    if not ignore_pause and notifications_paused(repo):
+        print("Notifications are paused (app_state): digest skipped.")
+        return
+    sent = run_digest(repo, settings, notifier, ignore_pause=True)
     print(f"Digest sent with {sent} jobs.")
 
 

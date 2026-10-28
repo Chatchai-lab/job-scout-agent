@@ -10,7 +10,13 @@ def main() -> None:
     triage.add_argument(
         "--no-notify", action="store_true", help="Score and store only, no Telegram messages"
     )
-    sub.add_parser("digest", help="Send the daily Telegram digest")
+    triage.add_argument(
+        "--ignore-pause", action="store_true", help="Push even while notifications are paused"
+    )
+    digest = sub.add_parser("digest", help="Send the daily Telegram digest")
+    digest.add_argument(
+        "--ignore-pause", action="store_true", help="Send even while notifications are paused"
+    )
     sub.add_parser("discover", help="Find job boards for pending company candidates")
     seed = sub.add_parser("seed-companies", help="Load a companies YAML into Supabase")
     seed.add_argument("path")
@@ -33,7 +39,7 @@ def main() -> None:
     if args.command == "triage":
         from job_scout.runner import run_triage_command
 
-        run_triage_command(notify=not args.no_notify)
+        run_triage_command(notify=not args.no_notify, ignore_pause=args.ignore_pause)
         return
 
     if args.command == "resend":
@@ -51,7 +57,7 @@ def main() -> None:
     if args.command == "digest":
         from job_scout.runner import run_digest_command
 
-        run_digest_command()
+        run_digest_command(ignore_pause=args.ignore_pause)
         return
 
     if args.command == "maintenance":

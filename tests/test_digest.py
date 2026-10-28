@@ -151,3 +151,25 @@ def test_digest_skips_closed_jobs():
     repo.jobs[0]["closed_at"] = "2026-10-20T00:00:00+00:00"
     notifier = FakeNotifier()
     assert run_digest(repo, Settings(), notifier) == 0
+
+
+def _repo_with_one_job():
+    repo = FakeRepo()
+    repo.insert_jobs([_job(1)])
+    repo.save_score({"job_id": "job-1", **score().model_dump()})
+    return repo
+
+
+def test_paused_digest_sends_and_marks_nothing():
+    repo = _repo_with_one_job()
+    repo.state["notifications_paused"] = "true"
+    notifier = FakeNotifier()
+    assert run_digest(repo, Settings(), notifier) == 0
+    assert notifier.sent == [] and repo.scores["job-1"]["notified_at"] is None
+
+
+def test_paused_digest_still_sends_when_forced_for_testing():
+    repo = _repo_with_one_job()
+    repo.state["notifications_paused"] = "true"
+    notifier = FakeNotifier()
+    assert run_digest(repo, Settings(), notifier, ignore_pause=True) == 1
