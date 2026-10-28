@@ -141,6 +141,9 @@ Berufserfahrung), ohne zu übertreiben. Keine Platzhalter wie [Name]. Nenne höc
 aus dem Profil in ein bis zwei Sätzen, nur als Beleg für etwas, das die Stelle verlangt, und nur \
 bei KI-, Automatisierungs- oder Engineering-Stellen. Der Brief handelt von der Firma und dem \
 Kandidaten, nicht von seinen Projekten.
+- Zeitform: Das heutige Datum steht in der Nachricht. Eine Station gilt nur als aktuell, wenn ihr \
+Ende "present" ist oder nach dem heutigen Datum liegt. Liegt das Ende davor, schreibe im Perfekt \
+oder Präteritum und nenne den Zeitraum ("bis Oktober 2026"), nie "aktuell" oder "derzeit".
 - gaps: 4 bis 8 zentrale Anforderungen der Anzeige, je mit Status (erfüllt, teilweise, fehlt) und \
 kurzer Begründung mit Bezug auf das Profil.
 Antworte ausschließlich über das Tool submit_package."""
@@ -199,7 +202,7 @@ def job_text(job: dict[str, Any]) -> str:
 
 
 def build_draft_user(job: dict[str, Any], feedback: list[str] | None) -> str:
-    text = job_text(job)
+    text = f"Heutiges Datum: {date.today().isoformat()}\n\n" + job_text(job)
     if feedback:
         text += (
             "\n\nDie vorige Fassung des Anschreibens enthielt unbelegte Angaben: "
@@ -291,11 +294,13 @@ def create_package(
         rewrites = selection["rewrites"]
 
         bad_rewrites = {i for i, text in rewrites.items() if deterministic_problems(text, corpus)}
-        summary_bad = bool(selection["summary"]) and bool(
-            deterministic_problems(selection["summary"], corpus)
+        summary_problems = (
+            deterministic_problems(selection["summary"], corpus) if selection["summary"] else []
         )
-        headline_bad = bool(selection["headline"]) and bool(
+        headline_problems = (
             deterministic_problems(selection["headline"], corpus, posting)
+            if selection["headline"]
+            else []
         )
         letter_problems = deterministic_problems(draft.cover_letter, corpus, posting)
 
@@ -315,22 +320,29 @@ def create_package(
             if target.startswith("bullet:"):
                 bad_rewrites.add(target.split(":", 1)[1])
             elif target == "summary":
-                summary_bad = True
+                summary_problems.append(issue["problem"])
             elif target == "headline":
-                headline_bad = True
+                headline_problems.append(issue["problem"])
             elif target == "cover_letter":
                 letter_problems.append(issue["problem"])
 
         for bullet_id in bad_rewrites:
             rewrites.pop(bullet_id, None)  # fall back to the profile wording
-        if summary_bad:
-            selection["summary"] = None  # renderer then uses the profile summary
-        if headline_bad:
-            selection["headline"] = None  # renderer then uses the profile headline
-        if letter_problems and attempt == 0:
-            feedback = letter_problems
+        if (letter_problems or summary_problems or headline_problems) and attempt == 0:
+            # One more try with the findings, so the CV text stays tailored to the job.
+            feedback = (
+                [f"Anschreiben: {p}" for p in letter_problems]
+                + [f"Profiltext: {p}" for p in summary_problems]
+                + [f"Überschrift: {p}" for p in headline_problems]
+            )
             continue
         warnings = [f"Anschreiben: {p}" for p in letter_problems[:MAX_WARNING_ISSUES]]
+        if summary_problems:
+            selection["summary"] = None  # renderer then uses the profile summary
+            warnings.append(f"Profiltext durch Standardtext ersetzt ({summary_problems[0]})")
+        if headline_problems:
+            selection["headline"] = None  # renderer then uses the profile headline
+            warnings.append(f"Überschrift durch Standardtext ersetzt ({headline_problems[0]})")
         if bad_rewrites:
             warnings.append(
                 f"{len(bad_rewrites)} umformulierte Stichpunkte verworfen (Originaltext bleibt)"

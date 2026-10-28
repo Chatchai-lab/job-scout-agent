@@ -117,9 +117,18 @@ def test_rewrite_with_new_number_falls_back_to_original():
 def test_llm_flagged_bullet_and_summary_are_reverted():
     flags = [{"target": "bullet:exp-a-1", "problem": "übertrieben"},
              {"target": "summary", "problem": "unbelegt"}]
-    result, _ = _create([_draft()], [flags])
+    result, _ = _create([_draft(), _draft()], [flags, flags])  # one retry, still flagged
     assert result.selection["rewrites"] == {}
     assert result.selection["summary"] is None  # renderer falls back to the profile summary
+    assert any(w.startswith("Profiltext durch Standardtext ersetzt") for w in result.warnings)
+
+
+def test_flagged_summary_is_regenerated_once_and_kept_when_the_retry_is_clean():
+    flagged = [{"target": "summary", "problem": "unbelegt"}]
+    result, client = _create([_draft(), _draft(summary="Angehender Engineer.")], [flagged, []])
+    assert result.selection["summary"] == "Angehender Engineer."
+    assert result.warnings == []
+    assert "Profiltext: unbelegt" in client.calls[-2][1]  # the retry carried the finding
 
 
 def test_letter_with_invented_number_is_regenerated_once():
@@ -251,9 +260,13 @@ def test_headline_and_summary_are_tailored_to_the_job():
 
 
 def test_flagged_or_unsupported_headline_falls_back_to_the_profile_headline():
-    flagged, _ = _create([_draft()], [[{"target": "headline", "problem": "unbelegt"}]])
+    one_flag = [{"target": "headline", "problem": "unbelegt"}]
+    flagged, _ = _create([_draft(), _draft()], [one_flag, one_flag])
     assert flagged.selection["headline"] is None
-    invented, _ = _create([_draft(headline="Angehender Kubernetes Engineer")], [[]])
+    assert any(w.startswith("Überschrift durch Standardtext ersetzt") for w in flagged.warnings)
+    invented, _ = _create(
+        [_draft(headline="Angehender Kubernetes Engineer")] * 2, [[], []]
+    )
     assert invented.selection["headline"] is None
 
 
@@ -308,3 +321,13 @@ def test_package_can_be_built_for_an_unscored_initiative_job():
                        "kind": "initiative"}])
     assert repo.package_job("job-1")["kind"] == "initiative"
     assert repo.package_job("missing") is None
+
+
+def test_draft_message_carries_todays_date_and_tense_rule():
+    from datetime import date
+
+    from job_scout.package import INSTRUCTIONS, build_draft_user
+
+    text = build_draft_user(JOB, None)
+    assert text.startswith(f"Heutiges Datum: {date.today().isoformat()}")
+    assert "Zeitform" in INSTRUCTIONS and "nie \"aktuell\"" in INSTRUCTIONS
