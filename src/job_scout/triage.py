@@ -14,7 +14,7 @@ import httpx
 from job_scout.config import Settings
 from job_scout.models import JobPosting
 from job_scout.notify import Notifier, format_job
-from job_scout.prefilter import INITIATIVE_TITLE, prefilter
+from job_scout.prefilter import INITIATIVE_TITLE, WORKING_STUDENT_TITLE, prefilter
 from job_scout.pricing import cost_usd
 from job_scout.repo import Repo
 from job_scout.scoring import ScoreResult, build_system
@@ -150,9 +150,14 @@ def score_pending(
     results: list[tuple[dict[str, Any], dict[str, Any]]] = []
     drops: list[dict[str, Any]] = []
     initiative_ids: list[str] = []
+    working_student_ids: list[str] = []
 
     for row in repo.unscored_jobs():
-        reason = prefilter(posting_from_row(row), include_abroad=settings.include_abroad)
+        reason = prefilter(
+            posting_from_row(row),
+            include_abroad=settings.include_abroad,
+            include_working_student=settings.include_working_student,
+        )
         if reason:
             drops.append({"job_id": row["id"], "reason": str(reason)})
             continue
@@ -161,6 +166,8 @@ def score_pending(
             drops.append({"job_id": row["id"], "reason": "initiative"})
             initiative_ids.append(row["id"])
             continue
+        if WORKING_STUDENT_TITLE.search(row["title"] or ""):
+            working_student_ids.append(row["id"])  # scored like any posting, flagged for display
         if spent >= budget_usd:
             stats.budget_stopped = True
             break
@@ -194,7 +201,8 @@ def score_pending(
         results.append((row, score_row))
 
     repo.insert_drops(drops)
-    repo.mark_initiative(initiative_ids)
+    repo.mark_kind(initiative_ids, "initiative")
+    repo.mark_kind(working_student_ids, "working_student")
     stats.dropped = len(drops) - len(initiative_ids)
     stats.initiatives = len(initiative_ids)
     return results

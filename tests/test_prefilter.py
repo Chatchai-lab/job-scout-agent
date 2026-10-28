@@ -106,8 +106,6 @@ def test_internships_and_working_students_are_dropped():
         "Engineering Intern",
         "Software Engineer Internship",
         "Claude Code Engineer (m/w/d) – Praktikum (München)",
-        "Werkstudent Software Entwicklung (m/w/d)",
-        "Working Student Backend Engineer",
         "Bachelorarbeit Machine Learning Engineer",
         "Ausbildung Fachinformatiker Anwendungsentwicklung",
     ):
@@ -117,3 +115,38 @@ def test_internships_and_working_students_are_dropped():
 def test_full_time_junior_roles_are_not_mistaken_for_internships():
     for title in ("Internal Tools Engineer", "Software Engineer (Graduate)", "Solutions Engineer"):
         assert prefilter(_job(title=title)) is None, title
+
+
+def test_working_student_jobs_are_kept_near_darmstadt_or_remote():
+    for title, location, remote in (
+        ("Werkstudent Softwareentwicklung (m/w/d)", "Darmstadt", False),
+        ("Working Student Backend Engineer", "Frankfurt am Main", False),
+        ("Werkstudent Data & AI", "Mainz, Germany", False),
+        ("Werkstudent Python (m/w/d)", "Berlin", True),
+        ("Werkstudent KI (m/w/d)", None, False),
+    ):
+        job = _job(title=title, location=location, remote=remote)
+        assert prefilter(job) is None, (title, location)
+
+
+def test_working_student_jobs_far_away_or_off_topic_are_dropped():
+    far = _job(title="Werkstudent Softwareentwicklung (m/w/d)", location="Hamburg, Germany")
+    assert prefilter(far) == "working_student_far"
+    off_topic = _job(title="Werkstudent Marketing (m/w/d)", location="Darmstadt")
+    assert prefilter(off_topic) == "title_excluded"
+    hr = _job(title="Werkstudent Buchhaltung (m/w/d)", location="Darmstadt")
+    assert prefilter(hr) == "title_not_dev"
+
+
+def test_working_student_switch_turns_them_off_again():
+    job = _job(title="Werkstudent Softwareentwicklung (m/w/d)", location="Darmstadt")
+    assert prefilter(job, include_working_student=False) == "title_excluded"
+    internship = _job(title="Praktikum Softwareentwicklung", location="Darmstadt")
+    assert prefilter(internship) == "title_excluded"
+
+
+def test_german_cities_without_the_country_name_are_not_dropped():
+    for location in ("Darmstadt", "Karlsruhe", "Dresden, Sachsen", "Bonn", "Nürnberg", "Köln"):
+        assert prefilter(_job(location=location)) is None, location
+    assert prefilter(_job(location="Kielce, Poland")) == "outside_germany"
+    assert prefilter(_job(location="Palm Beach, FL")) == "outside_germany"

@@ -18,7 +18,12 @@ def _still_allowed(row: dict[str, Any], settings: Settings) -> bool:
         return True
     if job.get("closed_at"):
         return False  # the posting is gone from the company board
-    return prefilter(posting_from_row(job), include_abroad=settings.include_abroad) is None
+    reason = prefilter(
+        posting_from_row(job),
+        include_abroad=settings.include_abroad,
+        include_working_student=settings.include_working_student,
+    )
+    return reason is None
 
 
 def select_digest(rows: list[dict[str, Any]], settings: Settings) -> list[dict[str, Any]]:

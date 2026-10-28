@@ -24,6 +24,7 @@ def format_job(job: dict[str, Any], score: dict[str, Any] | ScoreResult) -> str:
     if job.get("remote"):
         location += " (remote)"
     lines = [
+        *(["🎓 Werkstudent"] if job.get("kind") == "working_student" else []),
         f"<b>{html.escape(job['title'])}</b>",
         html.escape(job["company_name"]),
         f"📍 {html.escape(location)}",

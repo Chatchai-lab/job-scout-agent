@@ -34,9 +34,32 @@ EXCLUDED_TITLE = re.compile(
     r"research|forschung|support|designer|\bdesign\b|\baccount\b|accountant|recruit|"
     r"counsel|legal|marketing|financ|\bhr\b|\bpeople\b|payroll|compensation|talent|"
     r"\bwriter\b|mechanical|electrical|electronic|hardware|mechatronic|optical|camera|"
-    r"manufacturing|propulsion|structural|\brf\b|"
-    r"praktik|\bintern\b|internship|werkstudent|working student|\bthesis\b|abschlussarbeit|"
-    r"bachelorarbeit|masterarbeit|ausbildung|apprentice|duales studium|studierende|studenten",
+    r"manufacturing|propulsion|structural|\brf\b",
+    re.IGNORECASE,
+)
+
+# Not a regular full-time job and not a working-student job either.
+NOT_FULL_TIME = re.compile(
+    r"praktik|\bintern\b|internship|\bthesis\b|abschlussarbeit|bachelorarbeit|masterarbeit|"
+    r"ausbildung|apprentice|duales studium|studierende|studenten",
+    re.IGNORECASE,
+)
+
+# Working-student jobs (part time next to the studies) are wanted near Darmstadt or remote.
+WORKING_STUDENT_TITLE = re.compile(
+    r"werkstudent|working student|studentische|student assistant|student worker", re.IGNORECASE
+)
+WORKING_STUDENT_TECH = re.compile(
+    r"software|entwickl|developer|engineer|\bit\b|data|daten|\bai\b|\bki\b|machine learning|"
+    r"\bml\b|llm|python|cloud|devops|automat|informatik|web|backend|frontend|full[- ]?stack|"
+    r"\bqa\b|test|analyst|analytics",
+    re.IGNORECASE,
+)
+RHEIN_MAIN = re.compile(
+    r"darmstadt|frankfurt|mainz|wiesbaden|offenbach|r(?:ü|ue)sselsheim|heidelberg|mannheim|"
+    r"ludwigshafen|weiterstadt|griesheim|bensheim|weinheim|aschaffenburg|hanau|\blangen\b|"
+    r"dreieich|neu-isenburg|eschborn|bad homburg|oberursel|kelsterbach|raunheim|gro(?:ß|ss)-gerau|"
+    r"worms|hessen|hesse|rhein-main|rhine-main|remote|homeoffice|home office",
     re.IGNORECASE,
 )
 
@@ -84,12 +107,68 @@ _EU_HINTS = (
     "berlin",
     "munich",
     "münchen",
+    "muenchen",
     "hamburg",
     "frankfurt",
     "cologne",
     "köln",
+    "koeln",
     "stuttgart",
+    "düsseldorf",
+    "duesseldorf",
+    "dresden",
+    "leipzig",
+    "hannover",
+    "hanover",
+    "nürnberg",
+    "nuernberg",
+    "nuremberg",
+    "bremen",
+    "dortmund",
+    "essen",
+    "bonn",
+    "karlsruhe",
+    "mannheim",
+    "heidelberg",
+    "darmstadt",
+    "mainz",
+    "wiesbaden",
+    "offenbach",
+    "augsburg",
+    "regensburg",
+    "freiburg",
+    "münster",
+    "muenster",
+    "aachen",
+    "kiel",
+    "rostock",
+    "potsdam",
+    "jena",
+    "ulm",
+    "würzburg",
+    "wuerzburg",
+    "bielefeld",
+    "braunschweig",
+    "kassel",
+    "erlangen",
+    "ingolstadt",
+    "wolfsburg",
+    "chemnitz",
+    "saarbrücken",
+    "hessen",
+    "bayern",
+    "baden-württemberg",
+    "nrw",
     "remote",
+)
+
+
+# Whole-word matches, so "ulm" or "kiel" cannot hide inside another word.
+_GERMAN_PLACE = re.compile(
+    r"\b(?:" + "|".join(re.escape(h) for h in _EU_HINTS if h != "remote") + r")\b", re.IGNORECASE
+)
+_GERMAN_OR_REMOTE = re.compile(
+    r"\b(?:" + "|".join(re.escape(h) for h in _EU_HINTS) + r")\b", re.IGNORECASE
 )
 
 
@@ -97,9 +176,12 @@ class DropReason(str):
     """Readable reason stored in prefilter_drops.reason."""
 
 
-def prefilter(job: JobPosting, *, include_abroad: bool = False) -> DropReason | None:
+def prefilter(
+    job: JobPosting, *, include_abroad: bool = False, include_working_student: bool = True
+) -> DropReason | None:
     """Return a drop reason, or None if the job should go to the LLM."""
     title = job.title or ""
+    working_student = bool(WORKING_STUDENT_TITLE.search(title))
 
     if SENIOR_TITLE.search(title):
         return DropReason("senior_title")
@@ -111,9 +193,17 @@ def prefilter(job: JobPosting, *, include_abroad: bool = False) -> DropReason | 
     if US_ONLY.search(text):
         return DropReason("us_only")
 
-    if EXCLUDED_TITLE.search(title):
+    if EXCLUDED_TITLE.search(title) or NOT_FULL_TIME.search(title):
         return DropReason("title_excluded")
-    if not (
+    if working_student:
+        if not include_working_student:
+            return DropReason("title_excluded")
+        if not WORKING_STUDENT_TECH.search(title):
+            return DropReason("title_not_dev")
+        near = RHEIN_MAIN.search(f"{title} {job.location or ''}")
+        if job.location and not job.remote and not near:
+            return DropReason("working_student_far")
+    elif not (
         TITLE_KEYWORDS.search(title)
         or DEV_TITLE.search(title)
         or INITIATIVE_TITLE.search(title)
@@ -122,12 +212,12 @@ def prefilter(job: JobPosting, *, include_abroad: bool = False) -> DropReason | 
 
     if not include_abroad:
         place = f"{title} {job.location or ''}"
-        german = any(hint in place.lower() for hint in _EU_HINTS if hint != "remote")
+        german = _GERMAN_PLACE.search(place)
         foreign = NON_DE_PLACES.search(place) or NON_DE_CODES.search(place)
         if foreign and not german:
             return DropReason("outside_germany")
         if job.location and not job.remote:
-            if not any(hint in job.location.lower() for hint in _EU_HINTS):
+            if not _GERMAN_OR_REMOTE.search(job.location):
                 return DropReason("outside_germany")
 
     return None

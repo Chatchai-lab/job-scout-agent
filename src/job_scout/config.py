@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     instant_push_threshold: int = 9
     instant_reach_threshold: int = 6
     include_abroad: bool = False
+    include_working_student: bool = True  # Werkstudent near Darmstadt or remote
     eur_per_usd: float = 0.92
     profile_yaml: str = ""
 

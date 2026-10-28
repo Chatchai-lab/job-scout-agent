@@ -166,8 +166,25 @@ Rolle passt, und frage nach einem Gespräch. Frühester Start März 2027.
 aus dem Profil."""
 
 
+WORKING_STUDENT_NOTE = """\
+WERKSTUDENTENSTELLE: Der Kandidat bewirbt sich neben dem Studium (B.Sc. Informatik, Hochschule \
+Darmstadt, Abschluss Februar 2027) auf eine Teilzeitstelle. Abweichend von den Regeln oben:
+- cover_letter: Nenne statt des Vollzeitstarts im März 2027 die Verfügbarkeit aus \
+target.availability_werkstudent im Profil (Stunden pro Woche, Start). Erwähne das laufende \
+Studium und den Bezug der Stelle zum Studium. Erfinde keine Verfügbarkeit.
+- headline: "Informatikstudent (B.Sc.)" plus Fachgebiet der Stelle, höchstens 6 Wörter.
+- summary: erster Satz beginnt mit "Informatikstudent (B.Sc. …, Hochschule Darmstadt)".
+"""
+
+
 def job_text(job: dict[str, Any]) -> str:
     description = (job.get("description") or "")[:MAX_DESCRIPTION_CHARS]
+    if job.get("kind") == "working_student":
+        return WORKING_STUDENT_NOTE + "\n" + (
+            f"Firma: {job['company_name']}\nTitel: {job['title']}\n"
+            f"Ort: {job.get('location') or 'unbekannt'}\nLink: {job['url']}\n\n"
+            f"Beschreibung:\n{description or '(keine)'}"
+        )
     if job.get("kind") == "initiative":
         return (
             INITIATIVE_NOTE + "\n\n"

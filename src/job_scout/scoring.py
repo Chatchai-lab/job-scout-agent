@@ -97,6 +97,12 @@ Berufseinsteiger-Stellen reichen sie aus. Fordert eine Anzeige ausdrücklich meh
 Berufserfahrung in einem Stack, senkt das den Fit, aber nur dort. Was unter "skills_detail" \
 als nicht vorhanden steht (zum Beispiel Java), gilt als fehlend.
 
+Zusätzlich sind jetzt Werkstudentenstellen gewünscht (bis zu 20 Stunden pro Woche, Raum Darmstadt \
+oder remote, ab sofort möglich). Für solche Stellen gilt: Der Kandidat studiert noch, deshalb ist \
+Seniorität kein Hindernis (reach hoch, wenn Studierende angesprochen sind), start_ok ist null oder \
+true (Teilzeit neben dem Studium, kein Vollzeitstart), und der Fit richtet sich nach Aufgaben und \
+Technik. Bewerte sie mit der Stufe "nah", sofern sie technisch passen.
+
 Regeln:
 - Junior/Graduate passt immer; "Stretch" bis ca. 3 Jahre Erfahrung ist noch okay (reach mittel).
 - Reisebereitschaft, Branche (auch Defense), Sprache (Deutsch/Englisch), Vertragsart und \

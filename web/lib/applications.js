@@ -158,7 +158,7 @@ export function parseInitiativeRequest(text) {
 
 // Mirrors config.py (fit_threshold, reach_threshold, monthly_budget_eur, eur_per_usd).
 export const LIMITS = { fit: 5, reach: 4, budgetEur: 5, eurPerUsd: 0.92 };
-export const NOT_FULL_TIME = /praktik|\bintern\b|internship|werkstudent|working student|thesis|abschlussarbeit|ausbildung|studierende/i;
+export const NOT_FULL_TIME = /praktik|\bintern\b|internship|thesis|abschlussarbeit|ausbildung|studierende/i;
 
 export function statusView(snap) {
   const apps = ORDER.map((s) => [s, snap.statuses[s] ?? 0])
