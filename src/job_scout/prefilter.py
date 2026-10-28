@@ -49,10 +49,20 @@ NOT_FULL_TIME = re.compile(
 WORKING_STUDENT_TITLE = re.compile(
     r"werkstudent|working student|studentische|student assistant|student worker", re.IGNORECASE
 )
+# "Anything with IT": development, data, support, administration, testing, web, security ...
 WORKING_STUDENT_TECH = re.compile(
-    r"software|entwickl|developer|engineer|\bit\b|data|daten|\bai\b|\bki\b|machine learning|"
-    r"\bml\b|llm|python|cloud|devops|automat|informatik|web|backend|frontend|full[- ]?stack|"
-    r"\bqa\b|test|analyst|analytics",
+    r"\bit\b|it-|edv|software|entwickl|developer|engineer|informatik|daten|data|\bai\b|\bki\b|"
+    r"\bml\b|llm|python|java|cloud|devops|automat|\bweb|digital|backend|frontend|full[- ]?stack|"
+    r"\bqa\b|test|analyst|analytics|system|netz|network|security|sicherheit|\bsap\b|erp|crm|"
+    r"\bbi\b|support|helpdesk|admin|infrastruktur|infrastructure|\bapp\b|mobile|\btech|cyber|"
+    r"scrum|robot|forschung|research",
+    re.IGNORECASE,
+)
+# Business functions that stay out even for working students. Support, hardware and research
+# are IT-related here, so they are not part of this list.
+WORKING_STUDENT_EXCLUDED = re.compile(
+    r"\baccount\b|accountant|recruit|counsel|legal|marketing|financ|\bhr\b|\bpeople\b|payroll|"
+    r"compensation|talent|\bwriter\b|mechanical|electrical|manufacturing|propulsion|structural",
     re.IGNORECASE,
 )
 RHEIN_MAIN = re.compile(
@@ -193,7 +203,10 @@ def prefilter(
     if US_ONLY.search(text):
         return DropReason("us_only")
 
-    if EXCLUDED_TITLE.search(title) or NOT_FULL_TIME.search(title):
+    if NOT_FULL_TIME.search(title):
+        return DropReason("title_excluded")
+    excluded = WORKING_STUDENT_EXCLUDED if working_student else EXCLUDED_TITLE
+    if excluded.search(title):
         return DropReason("title_excluded")
     if working_student:
         if not include_working_student:
@@ -201,7 +214,9 @@ def prefilter(
         if not WORKING_STUDENT_TECH.search(title):
             return DropReason("title_not_dev")
         near = RHEIN_MAIN.search(f"{title} {job.location or ''}")
-        if job.location and not job.remote and not near:
+        # Arbeitsagentur searches already filter by distance, so any town counts as near.
+        trusted_region = job.source == "arbeitsagentur"
+        if job.location and not job.remote and not near and not trusted_region:
             return DropReason("working_student_far")
     elif not (
         TITLE_KEYWORDS.search(title)

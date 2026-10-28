@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     digest_max_jobs: int = 7
     reminder_days: int = 14  # nudge for applications without news after this many days
     fit_threshold: int = 5
+    working_student_fit_threshold: int = 3  # any IT-related working-student job is welcome
     reach_threshold: int = 4  # 4 = stretch (3 to 4 years asked): the core FDE roles often sit here
     instant_push_threshold: int = 9
     instant_reach_threshold: int = 6

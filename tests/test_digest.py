@@ -175,3 +175,11 @@ def test_paused_digest_still_sends_when_forced_for_testing():
     repo.state["notifications_paused"] = "true"
     notifier = FakeNotifier()
     assert run_digest(repo, Settings(), notifier, ignore_pause=True) == 1
+
+
+def test_working_student_jobs_qualify_with_a_lower_fit():
+    s = Settings()
+    row = _row(3, 9)
+    assert not qualifies(row, s)
+    assert qualifies({**row, "jobs": {"kind": "working_student"}}, s)
+    assert not qualifies({**_row(2, 9), "jobs": {"kind": "working_student"}}, s)

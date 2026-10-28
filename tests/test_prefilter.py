@@ -150,3 +150,28 @@ def test_german_cities_without_the_country_name_are_not_dropped():
         assert prefilter(_job(location=location)) is None, location
     assert prefilter(_job(location="Kielce, Poland")) == "outside_germany"
     assert prefilter(_job(location="Palm Beach, FL")) == "outside_germany"
+
+
+def test_arbeitsagentur_working_student_jobs_count_as_near_in_any_town():
+    near = _job(title="Werkstudent Softwareentwicklung (m/w/d)", location="Pfungstadt, Deutschland")
+    assert prefilter(near) == "working_student_far"  # unknown town from another source
+    from_search = _job(
+        title="Werkstudent Softwareentwicklung (m/w/d)", location="Pfungstadt, Deutschland",
+        source="arbeitsagentur",
+    )
+    assert prefilter(from_search) is None
+
+
+def test_any_it_related_working_student_job_is_kept():
+    for title in (
+        "Werkstudent IT-Support (m/w/d)",
+        "Werkstudent Systemadministration",
+        "Werkstudent (m/w/d) Helpdesk",
+        "Werkstudent Testautomatisierung",
+        "Working Student Cyber Security",
+        "Werkstudent Forschung KI",
+        "Werkstudent SAP Berater",
+    ):
+        assert prefilter(_job(title=title, location="Darmstadt")) is None, title
+    # Support stays excluded for regular full-time jobs.
+    assert prefilter(_job(title="Customer Support Engineer")) == "title_excluded"

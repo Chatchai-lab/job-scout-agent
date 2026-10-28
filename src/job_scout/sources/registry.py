@@ -6,6 +6,7 @@ import httpx
 
 from job_scout.models import JobPosting
 from job_scout.sources import (
+    arbeitsagentur,
     ashby,
     bamboohr,
     greenhouse,
@@ -28,6 +29,7 @@ _REGISTRY: dict[str, FetchFn] = {
     "smartrecruiters": smartrecruiters.fetch,
     "workable": workable.fetch,
     "bamboohr": bamboohr.fetch,
+    "arbeitsagentur": arbeitsagentur.fetch,
 }
 
 

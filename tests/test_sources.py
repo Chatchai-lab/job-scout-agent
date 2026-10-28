@@ -127,8 +127,8 @@ def test_unknown_ats_raises():
 
 def test_supported_ats_lists_all_registered_sources():
     assert supported_ats() == [
-        "ashby", "bamboohr", "greenhouse", "greenhouse_eu", "lever", "personio", "recruitee",
-        "smartrecruiters", "workable",
+        "arbeitsagentur", "ashby", "bamboohr", "greenhouse", "greenhouse_eu", "lever", "personio",
+        "recruitee", "smartrecruiters", "workable",
     ]
 
 
@@ -272,3 +272,36 @@ def test_bamboohr_fetch_reads_list_and_detail():
     assert jobs[0].url == "https://exampleco.bamboohr.com/careers/9"
     assert jobs[0].remote is True
     assert "Onboard clients" in jobs[0].description
+
+
+@respx.mock
+def test_arbeitsagentur_search_returns_employers_from_the_postings():
+    base = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4"
+    route = respx.get(f"{base}/jobs").mock(
+        return_value=httpx.Response(
+            200,
+            json={"stellenangebote": [{
+                "refnr": "10001-ABC-S", "titel": "Werkstudent Softwareentwicklung (m/w/d)",
+                "arbeitgeber": "Beispiel Software GmbH", "arbeitsort": {"ort": "Pfungstadt"},
+                "aktuelleVeroeffentlichungsdatum": "2026-10-20",
+            }]},
+        )
+    )
+    respx.get(url__startswith=f"{base}/jobdetails/").mock(
+        return_value=httpx.Response(
+            200, json={"stellenbeschreibung": "<p>Python und <b>Cloud</b></p>"}
+        )
+    )
+    with httpx.Client() as client:
+        jobs = fetch_for(
+            "arbeitsagentur", client, "Suche", "Werkstudent Informatik|Darmstadt|50"
+        )
+    params = route.calls.last.request.url.params
+    assert (params["was"], params["wo"], params["umkreis"]) == (
+        "Werkstudent Informatik", "Darmstadt", "50",
+    )
+    assert route.calls.last.request.headers["X-API-Key"] == "jobboerse-jobsuche"
+    assert jobs[0].company_name == "Beispiel Software GmbH"
+    assert jobs[0].location == "Pfungstadt, Deutschland"
+    assert jobs[0].url.endswith("/10001-ABC-S")
+    assert "Python und Cloud" in jobs[0].description

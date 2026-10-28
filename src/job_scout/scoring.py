@@ -101,7 +101,10 @@ Zusätzlich sind jetzt Werkstudentenstellen gewünscht (bis zu 20 Stunden pro Wo
 oder remote, ab sofort möglich). Für solche Stellen gilt: Der Kandidat studiert noch, deshalb ist \
 Seniorität kein Hindernis (reach hoch, wenn Studierende angesprochen sind), start_ok ist null oder \
 true (Teilzeit neben dem Studium, kein Vollzeitstart), und der Fit richtet sich nach Aufgaben und \
-Technik. Bewerte sie mit der Stufe "nah", sofern sie technisch passen.
+Technik. Bewerte sie mit der Stufe "nah", sofern sie technisch passen. Bei Werkstudentenstellen \
+zählt jede IT-bezogene Tätigkeit (Entwicklung, Daten, Support, Administration, Testing, Web, \
+Sicherheit): Gib Fit 5 oder mehr, wenn die Stelle IT-bezogen ist und zum Informatikstudium \
+passt, und weniger nur bei fehlendem IT-Bezug.
 
 Regeln:
 - Junior/Graduate passt immer; "Stretch" bis ca. 3 Jahre Erfahrung ist noch okay (reach mittel).

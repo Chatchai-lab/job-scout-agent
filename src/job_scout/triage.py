@@ -72,10 +72,12 @@ def posting_from_row(row: dict[str, Any]) -> JobPosting:
 
 
 def qualifies(score: dict[str, Any], settings: Settings) -> bool:
+    working_student = (score.get("jobs") or {}).get("kind") == "working_student"
+    fit_min = settings.working_student_fit_threshold if working_student else settings.fit_threshold
     return (
         score["ring"] != "raus"
         and score.get("start_ok") is not False
-        and score["fit"] >= settings.fit_threshold
+        and score["fit"] >= fit_min
         and score["reach"] >= settings.reach_threshold
     )
 

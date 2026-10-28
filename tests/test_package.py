@@ -336,3 +336,13 @@ def test_draft_message_carries_todays_date_and_tense_rule():
 def test_instructions_limit_the_thesis_to_one_sentence_and_ai_roles():
     assert "Bachelorarbeit" in INSTRUCTIONS and "genau EINEM" in INSTRUCTIONS
     assert "Keine Ergebnisse" in INSTRUCTIONS
+
+
+def test_initiative_for_a_working_student_uses_the_part_time_rules():
+    from job_scout.package import job_text
+
+    job = {"company_name": "Beispiel AG", "title": "Initiativbewerbung", "url": "",
+           "kind": "initiative", "description": "Werkstudent Informatik, Softwarehaus"}
+    text = job_text(job)
+    assert "INITIATIVBEWERBUNG" in text and "WERKSTUDENTENSTELLE" in text
+    assert "WERKSTUDENTENSTELLE" not in job_text({**job, "description": "Softwarehaus"})

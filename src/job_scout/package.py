@@ -145,6 +145,7 @@ Kandidaten, nicht von seinen Projekten.
 nur bei Stellen mit KI-, LLM-, Daten-, Automatisierungs- oder Entwicklerbezug, in genau EINEM \
 Satz und nur als Thema ("In meiner Bachelorarbeit untersuche ich ..."). Keine Ergebnisse, keine \
 Betreuer, keine Modellnamen. Bei anderen Stellen lässt du sie im Anschreiben weg.
+- Master: Erwähne ein Masterstudium in Vollzeitbewerbungen nie.
 - Zeitform: Das heutige Datum steht in der Nachricht. Eine Station gilt nur als aktuell, wenn ihr \
 Ende "present" ist oder nach dem heutigen Datum liegt. Liegt das Ende davor, schreibe im Perfekt \
 oder Präteritum und nenne den Zeitraum ("bis Oktober 2026"), nie "aktuell" oder "derzeit".
@@ -179,6 +180,8 @@ Darmstadt, Abschluss Februar 2027) auf eine Teilzeitstelle. Abweichend von den R
 - cover_letter: Nenne statt des Vollzeitstarts im März 2027 die Verfügbarkeit aus \
 target.availability_werkstudent im Profil (Stunden pro Woche, Start). Erwähne das laufende \
 Studium und den Bezug der Stelle zum Studium. Erfinde keine Verfügbarkeit.
+- Master: Steht im Profil unter target.master "offen", darfst du in einem Halbsatz sagen, dass \
+ein anschließendes Masterstudium geprüft wird. Behaupte nie, dass er angestrebt oder geplant ist.
 - headline: "Informatikstudent (B.Sc.)" plus Fachgebiet der Stelle, höchstens 6 Wörter.
 - summary: erster Satz beginnt mit "Informatikstudent (B.Sc. …, Hochschule Darmstadt)".
 """
@@ -193,8 +196,9 @@ def job_text(job: dict[str, Any]) -> str:
             f"Beschreibung:\n{description or '(keine)'}"
         )
     if job.get("kind") == "initiative":
+        working_student = "werkstudent" in description.lower()
         return (
-            INITIATIVE_NOTE + "\n\n"
+            INITIATIVE_NOTE + ("\n\n" + WORKING_STUDENT_NOTE if working_student else "") + "\n\n"
             f"Firma: {job['company_name']}\nAnzeige/Link: {job.get('url') or '(keiner)'}\n"
             f"Angaben zur Firma:\n{description or '(keine, schreibe allgemein)'}"
         )
