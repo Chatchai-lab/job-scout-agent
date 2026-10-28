@@ -141,6 +141,10 @@ Berufserfahrung), ohne zu übertreiben. Keine Platzhalter wie [Name]. Nenne höc
 aus dem Profil in ein bis zwei Sätzen, nur als Beleg für etwas, das die Stelle verlangt, und nur \
 bei KI-, Automatisierungs- oder Engineering-Stellen. Der Brief handelt von der Firma und dem \
 Kandidaten, nicht von seinen Projekten.
+- Bachelorarbeit: Hat ein Studiengang im Profil ein Feld "thesis", nenne das Thema im Anschreiben \
+nur bei Stellen mit KI-, LLM-, Daten-, Automatisierungs- oder Entwicklerbezug, in genau EINEM \
+Satz und nur als Thema ("In meiner Bachelorarbeit untersuche ich ..."). Keine Ergebnisse, keine \
+Betreuer, keine Modellnamen. Bei anderen Stellen lässt du sie im Anschreiben weg.
 - Zeitform: Das heutige Datum steht in der Nachricht. Eine Station gilt nur als aktuell, wenn ihr \
 Ende "present" ist oder nach dem heutigen Datum liegt. Liegt das Ende davor, schreibe im Perfekt \
 oder Präteritum und nenne den Zeitraum ("bis Oktober 2026"), nie "aktuell" oder "derzeit".

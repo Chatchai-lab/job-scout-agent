@@ -88,7 +88,10 @@
 
 \textbf{\VAR{ ed.degree | e }, \VAR{ ed.school | e }} \hfill \textcolor{light}{\VAR{ ed.range | e }}\\
 \BLOCK{ if ed.focus }
-Schwerpunkte: \VAR{ ed.focus | e }
+Schwerpunkte: \VAR{ ed.focus | e }\\
+\BLOCK{ endif }
+\BLOCK{ if ed.thesis }
+\VAR{ ed.thesis | e }
 \BLOCK{ endif }
 \BLOCK{ endfor }
 

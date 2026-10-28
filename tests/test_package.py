@@ -331,3 +331,8 @@ def test_draft_message_carries_todays_date_and_tense_rule():
     text = build_draft_user(JOB, None)
     assert text.startswith(f"Heutiges Datum: {date.today().isoformat()}")
     assert "Zeitform" in INSTRUCTIONS and "nie \"aktuell\"" in INSTRUCTIONS
+
+
+def test_instructions_limit_the_thesis_to_one_sentence_and_ai_roles():
+    assert "Bachelorarbeit" in INSTRUCTIONS and "genau EINEM" in INSTRUCTIONS
+    assert "Keine Ergebnisse" in INSTRUCTIONS

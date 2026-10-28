@@ -99,7 +99,7 @@ def build_context(
         })
     education = [
         {"degree": e["degree"], "school": e["school"], "focus": e.get("focus"),
-         "range": format_range(e["start"], e["end"])}
+         "thesis": e.get("thesis"), "range": format_range(e["start"], e["end"])}
         for e in profile.get("education", [])
     ]
     projects = []

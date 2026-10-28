@@ -107,3 +107,11 @@ def test_selection_headline_overrides_the_profile_headline():
     assert "Angehender Forward Deployed Engineer" in tex
     assert "Software \\& AI" not in tex
     assert "Software \\& AI" in render_cv(PROFILE, {"headline": None})
+
+
+def test_thesis_line_is_rendered_under_the_degree():
+    profile = yaml.safe_load(yaml.safe_dump(PROFILE))
+    profile["education"][0]["thesis"] = "Bachelorarbeit (in Arbeit): Quality-Gates & LLMs"
+    tex = render_cv(profile)
+    assert r"Bachelorarbeit (in Arbeit): Quality-Gates \& LLMs" in tex
+    assert "Bachelorarbeit" not in render_cv(PROFILE)
