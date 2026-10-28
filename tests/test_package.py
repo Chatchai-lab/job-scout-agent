@@ -117,7 +117,7 @@ def test_rewrite_with_new_number_falls_back_to_original():
 def test_llm_flagged_bullet_and_summary_are_reverted():
     flags = [{"target": "bullet:exp-a-1", "problem": "übertrieben"},
              {"target": "summary", "problem": "unbelegt"}]
-    result, _ = _create([_draft(), _draft()], [flags, flags])  # one retry, still flagged
+    result, _ = _create([_draft()] * 3, [flags] * 3)  # two retries, still flagged
     assert result.selection["rewrites"] == {}
     assert result.selection["summary"] is None  # renderer falls back to the profile summary
     assert any(w.startswith("Profiltext durch Standardtext ersetzt") for w in result.warnings)
@@ -142,7 +142,7 @@ def test_letter_with_invented_number_is_regenerated_once():
 
 def test_letter_still_unsupported_after_retry_is_delivered_with_warning():
     invented = _draft(cover_letter=INVENTED)
-    result, _ = _create([invented, invented], [[], []])
+    result, _ = _create([invented] * 3, [[], [], []])
     assert any(w.startswith("Anschreiben:") for w in result.warnings)
 
 
@@ -261,11 +261,11 @@ def test_headline_and_summary_are_tailored_to_the_job():
 
 def test_flagged_or_unsupported_headline_falls_back_to_the_profile_headline():
     one_flag = [{"target": "headline", "problem": "unbelegt"}]
-    flagged, _ = _create([_draft(), _draft()], [one_flag, one_flag])
+    flagged, _ = _create([_draft()] * 3, [one_flag] * 3)
     assert flagged.selection["headline"] is None
     assert any(w.startswith("Überschrift durch Standardtext ersetzt") for w in flagged.warnings)
     invented, _ = _create(
-        [_draft(headline="Angehender Kubernetes Engineer")] * 2, [[], []]
+        [_draft(headline="Angehender Kubernetes Engineer")] * 3, [[], [], []]
     )
     assert invented.selection["headline"] is None
 
@@ -298,7 +298,7 @@ def test_warning_lists_at_most_three_letter_problems():
         {"target": "cover_letter", "problem": f"Fehler {n}", "verdict": "unbelegt"}
         for n in range(5)
     ]
-    result, _ = _create([_draft(), _draft()], [flags, flags])
+    result, _ = _create([_draft()] * 3, [flags] * 3)
     assert len([w for w in result.warnings if w.startswith("Anschreiben")]) == MAX_WARNING_ISSUES
 
 
@@ -346,3 +346,10 @@ def test_initiative_for_a_working_student_uses_the_part_time_rules():
     text = job_text(job)
     assert "INITIATIVBEWERBUNG" in text and "WERKSTUDENTENSTELLE" in text
     assert "WERKSTUDENTENSTELLE" not in job_text({**job, "description": "Softwarehaus"})
+
+
+def test_a_second_rewrite_can_still_clean_up_the_letter():
+    flags = [{"target": "cover_letter", "problem": "Führungserfahrung erfunden"}]
+    result, client = _create([_draft()] * 3, [flags, flags, []])
+    assert len([c for c in client.calls if c[0] == "submit_package"]) == 3
+    assert result.warnings == []

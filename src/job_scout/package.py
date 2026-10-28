@@ -155,6 +155,7 @@ Antworte ausschließlich über das Tool submit_package."""
 
 
 MAX_WARNING_ISSUES = 3
+MAX_ATTEMPTS = 3  # first draft plus up to two rewrites that carry the checker's findings
 
 
 def build_draft_system(profile_text: str) -> str:
@@ -295,7 +296,7 @@ def create_package(
     usage: list[tuple[str, Usage]] = []
     feedback: list[str] | None = None
 
-    for attempt in range(2):
+    for attempt in range(MAX_ATTEMPTS):
         draft, u = draft_package(client, settings.model_package, profile_text, job, feedback)
         usage.append((settings.model_package, u))
         selection = build_selection(draft, profile)
@@ -336,7 +337,9 @@ def create_package(
 
         for bullet_id in bad_rewrites:
             rewrites.pop(bullet_id, None)  # fall back to the profile wording
-        if (letter_problems or summary_problems or headline_problems) and attempt == 0:
+        if (letter_problems or summary_problems or headline_problems) and (
+            attempt < MAX_ATTEMPTS - 1
+        ):
             # One more try with the findings, so the CV text stays tailored to the job.
             feedback = (
                 [f"Anschreiben: {p}" for p in letter_problems]
