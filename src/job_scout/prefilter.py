@@ -58,11 +58,12 @@ WORKING_STUDENT_TECH = re.compile(
     r"scrum|robot|forschung|research",
     re.IGNORECASE,
 )
-# Business functions that stay out even for working students. Support, hardware and research
-# are IT-related here, so they are not part of this list.
+# Business functions that stay out even for working students. IT support, hardware and research
+# are IT-related here, so they are not part of this list; customer-facing support is.
 WORKING_STUDENT_EXCLUDED = re.compile(
     r"\baccount\b|accountant|recruit|counsel|legal|marketing|financ|\bhr\b|\bpeople\b|payroll|"
-    r"compensation|talent|\bwriter\b|mechanical|electrical|manufacturing|propulsion|structural",
+    r"compensation|talent|\bwriter\b|mechanical|electrical|manufacturing|propulsion|structural|"
+    r"customer (?:support|success|service)|kundenservice|kundensupport",
     re.IGNORECASE,
 )
 RHEIN_MAIN = re.compile(

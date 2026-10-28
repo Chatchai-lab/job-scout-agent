@@ -173,5 +173,7 @@ def test_any_it_related_working_student_job_is_kept():
         "Werkstudent SAP Berater",
     ):
         assert prefilter(_job(title=title, location="Darmstadt")) is None, title
+    for title in ("Customer Support NL/ENG - Working Student", "Werkstudent Kundenservice"):
+        assert prefilter(_job(title=title, location="Darmstadt")) == "title_excluded", title
     # Support stays excluded for regular full-time jobs.
     assert prefilter(_job(title="Customer Support Engineer")) == "title_excluded"
