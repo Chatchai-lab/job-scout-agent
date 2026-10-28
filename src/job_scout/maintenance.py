@@ -104,8 +104,60 @@ def reprocess_outside_germany(repo: SupabaseRepo) -> int:
     return _reprocess(repo, keep)
 
 
+def reset_test_decisions(repo: SupabaseRepo) -> int:
+    """Forget the Merken/Verwerfen taps made while testing, so those jobs are shown again.
+
+    Package decisions and applications that hold a built package are kept.
+    """
+    db = repo.db
+    decisions = repo._all(
+        lambda: db.table("decisions").select("id,job_id").in_("action", ["save", "reject"]),
+    )
+    saved = repo._all(
+        lambda: db.table("applications")
+        .select("job_id")
+        .eq("status", "gemerkt")
+        .is_("cv_pdf_path", "null"),
+        key="job_id",
+    )
+    job_ids = list(dict.fromkeys([d["job_id"] for d in decisions] + [a["job_id"] for a in saved]))
+    for start in range(0, len(job_ids), _BATCH):
+        batch = job_ids[start : start + _BATCH]
+        repo._run(
+            db.table("decisions").delete().in_("job_id", batch).in_("action", ["save", "reject"])
+        )
+        repo._run(
+            db.table("applications")
+            .delete()
+            .in_("job_id", batch)
+            .eq("status", "gemerkt")
+            .is_("cv_pdf_path", "null")
+        )
+        repo._run(db.table("scores").update({"notified_at": None}).in_("job_id", batch))
+    return len(job_ids)
+
+
+def reset_palantir_package(repo: SupabaseRepo) -> int:
+    """Forget the test package for the Palantir forward deployed role (user asked for a reset)."""
+    db = repo.db
+    jobs = repo._run(
+        db.table("jobs")
+        .select("id")
+        .eq("company_name", "Palantir")
+        .eq("title", "Forward Deployed Software Engineer")
+    ).data
+    ids = [j["id"] for j in jobs]
+    if ids:
+        repo._run(db.table("decisions").delete().in_("job_id", ids).eq("action", "package"))
+        repo._run(db.table("applications").delete().in_("job_id", ids).eq("status", "paket"))
+        repo._run(db.table("scores").update({"notified_at": None}).in_("job_id", ids))
+    return len(ids)
+
+
 TASKS = {
     "rescore-dev-jobs": rescore_dev_jobs,
     "reprocess-working-students": reprocess_working_students,
     "reprocess-outside-germany": reprocess_outside_germany,
+    "reset-test-decisions": reset_test_decisions,
+    "reset-palantir-package": reset_palantir_package,
 }

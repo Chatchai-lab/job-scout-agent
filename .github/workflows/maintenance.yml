@@ -11,6 +11,8 @@ on:
           - rescore-dev-jobs
           - reprocess-working-students
           - reprocess-outside-germany
+          - reset-test-decisions
+          - reset-palantir-package
 
 jobs:
   maintenance:
