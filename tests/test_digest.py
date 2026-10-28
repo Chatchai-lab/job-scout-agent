@@ -16,7 +16,8 @@ def test_qualifies_applies_thresholds_ring_and_start():
     assert qualifies(_row(5, 9), s)  # fit 5 is the lower edge
     assert not qualifies(_row(4, 9), s)
     assert qualifies(_row(8, 5), s)  # reach 5 = stretch, still ok
-    assert not qualifies(_row(9, 4), s)
+    assert qualifies(_row(9, 4), s)  # reach 4 is the lower edge
+    assert not qualifies(_row(9, 3), s)
     assert not qualifies(_row(9, 9, ring="raus"), s)
     assert not qualifies(_row(9, 9, start_ok=False), s)
 
