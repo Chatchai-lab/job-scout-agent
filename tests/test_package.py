@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from pathlib import Path
 
@@ -362,11 +363,86 @@ def test_initiative_note_lets_the_company_notes_name_the_target_role():
     assert "wähle keine andere" in INITIATIVE_NOTE
 
 
-def test_english_note_is_added_only_for_english_packages():
-    from job_scout.package import ENGLISH_NOTE, build_draft_user
+class TranslatingClient:
+    """Answers submit_translation: prefixes every text with 'EN: ' unless told otherwise."""
 
-    job = {"company_name": "MDIS Consulting", "title": "Initiativbewerbung", "url": "",
-           "description": "x", "kind": "initiative"}
-    assert ENGLISH_NOTE not in build_draft_user(job, None)
-    text = build_draft_user(job, None, "en")
-    assert ENGLISH_NOTE in text and "Dear Sir or Madam" in text and "gaps bleiben deutsch" in text
+    def __init__(self, transform=None):
+        from types import SimpleNamespace
+
+        self.transform = transform or (lambda key, text: "EN: " + text)
+        self.calls = 0
+        self.keys: list[str] = []
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs):
+        from types import SimpleNamespace
+
+        self.calls += 1
+        text = kwargs["messages"][0]["content"]
+        found = re.findall(r"\[([^\]\n]+)\]\n(.*?)(?=\n\n\[|\n\nRufe das Tool)", text, flags=re.S)
+        self.keys = [k for k, _ in found]
+        items = [{"key": k, "text": self.transform(k, t)} for k, t in found]
+        usage = SimpleNamespace(input_tokens=100, output_tokens=50, cache_read_input_tokens=0,
+                                cache_creation_input_tokens=0)
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="tool_use", name="submit_translation",
+                                     input={"items": items})],
+            usage=usage, stop_reason="tool_use",
+        )
+
+
+def _english_build(tex, photo, workdir, name="cv"):
+    workdir.mkdir(parents=True, exist_ok=True)
+    if name == "cv":
+        assert r"\usepackage[english]{babel}" in tex and "Work Experience" in tex
+        assert "EN: " in tex  # the bullets are translated texts
+    else:
+        assert "english" in tex and "EN: " in tex and "Bewerbung als" not in tex
+    pdf = workdir / f"{name}.pdf"
+    pdf.write_bytes(b"%PDF-1.4 " + name.encode())
+    return pdf
+
+
+def test_german_package_stores_its_selection(tmp_path: Path):
+    repo = _repo_with_job()
+    run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), FakeNotifier(), "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    selection = repo.packages["job-1"]["selection"]
+    assert selection["headline"] == "Angehender Software Engineer"
+    assert selection["bullets"]["exp-a"] == ["exp-a-2", "exp-a-1"]
+
+
+def test_english_package_translates_the_stored_german_one(tmp_path: Path):
+    repo = _repo_with_job()
+    run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), FakeNotifier(), "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    before = dict(repo.packages["job-1"])
+    notifier, client = FakeNotifier(), TranslatingClient()
+    assert run_package(repo, Settings(), client, notifier, "job-1", build_pdf=_english_build,
+                       workdir=tmp_path / "en", lang="en") is True
+    assert client.calls == 1 and "letter" in client.keys and "headline" in client.keys
+    assert [name for name, _ in notifier.docs] == [
+        "Resume_Max_Mustermann.pdf", "CoverLetter_Firma_Max_Mustermann.pdf",
+    ]
+    assert repo.packages["job-1"] == before  # the German master is untouched
+    assert [u["purpose"] for u in repo.usage][-1] == "package"
+
+
+def test_english_without_a_stored_german_package_says_so(tmp_path: Path):
+    repo, notifier, client = _repo_with_job(), FakeNotifier(), TranslatingClient()
+    assert run_package(repo, Settings(), client, notifier, "job-1", build_pdf=_english_build,
+                       workdir=tmp_path, lang="en") is True
+    assert "zuerst ein deutsches Paket" in notifier.sent[0][0]
+    assert client.calls == 0 and not notifier.docs
+
+
+def test_translation_that_adds_numbers_or_technologies_is_repeated_then_rejected():
+    from job_scout.translate import translate_units
+
+    client = TranslatingClient(lambda key, text: text + " with 99 years of Kubernetes")
+    with pytest.raises(ValueError):
+        translate_units(client, "m", {"summary": "Student mit Python."})
+    assert client.calls == 3
+    ok = TranslatingClient(lambda key, text: "Student with Python.")
+    english, _ = translate_units(ok, "m", {"summary": "Student mit Python."})
+    assert english == {"summary": "Student with Python."}

@@ -20,11 +20,12 @@ import yaml
 from pydantic import BaseModel, Field
 
 from job_scout.config import Settings
-from job_scout.cvrender import render_cv
+from job_scout.cvrender import build_context, render_cv
 from job_scout.factcheck import deterministic_problems, llm_check, profile_corpus
 from job_scout.letterrender import render_letter
 from job_scout.pricing import Usage, cost_usd
 from job_scout.toolcall import call_tool
+from job_scout.translate import apply_units, context_units, translate_units
 
 MAX_DESCRIPTION_CHARS = 6000
 PHOTO_BUCKET = "cv-assets"
@@ -214,21 +215,8 @@ def job_text(job: dict[str, Any]) -> str:
     )
 
 
-ENGLISH_NOTE = """\
-SPRACHE: ENGLISCH. Abweichend von den Regeln oben schreibst du cover_letter, headline und summary \
-auf Englisch (Anrede "Dear Sir or Madam,", Schluss "Kind regards," und der Name aus dem Profil). \
-headline: "Aspiring <Role>", bei Werkstudentenstellen "Computer Science Student (B.Sc.)" plus \
-Fachgebiet. Beendete Stationen im Past Tense mit Zeitraum. Alle anderen Regeln (nur belegte \
-Fakten, Bachelorarbeit, kein Master, Starttermin) gelten unverändert. Die gaps bleiben deutsch. \
-Die Stichpunkte (rewrites) bleiben in der Sprache des Profils."""
-
-
-def build_draft_user(
-    job: dict[str, Any], feedback: list[str] | None, lang: str = "de"
-) -> str:
+def build_draft_user(job: dict[str, Any], feedback: list[str] | None) -> str:
     text = f"Heutiges Datum: {date.today().isoformat()}\n\n" + job_text(job)
-    if lang == "en":
-        text += "\n\n" + ENGLISH_NOTE
     if feedback:
         text += (
             "\n\nDie vorige Fassung des Anschreibens enthielt unbelegte Angaben: "
@@ -240,14 +228,14 @@ def build_draft_user(
 
 def draft_package(
     client: Any, model: str, profile_text: str, job: dict[str, Any],
-    feedback: list[str] | None = None, lang: str = "de",
+    feedback: list[str] | None = None,
 ) -> tuple[Draft, Usage]:
     payload, usage = call_tool(
         client,
         model=model,
         system_text=build_draft_system(profile_text),
         tool=DRAFT_TOOL,
-        user_text=build_draft_user(job, feedback, lang),
+        user_text=build_draft_user(job, feedback),
         max_tokens=16000,  # thinking tokens count against this limit
     )
     return Draft(**payload), usage
@@ -302,7 +290,7 @@ class PackageResult:
 
 
 def create_package(
-    client: Any, settings: Settings, profile_text: str, job: dict[str, Any], lang: str = "de"
+    client: Any, settings: Settings, profile_text: str, job: dict[str, Any]
 ) -> PackageResult:
     profile = yaml.safe_load(profile_text)
     corpus = profile_corpus(profile)
@@ -314,9 +302,7 @@ def create_package(
     feedback: list[str] | None = None
 
     for attempt in range(MAX_ATTEMPTS):
-        draft, u = draft_package(
-            client, settings.model_package, profile_text, job, feedback, lang
-        )
+        draft, u = draft_package(client, settings.model_package, profile_text, job, feedback)
         usage.append((settings.model_package, u))
         selection = build_selection(draft, profile)
         rewrites = selection["rewrites"]
@@ -443,8 +429,13 @@ def run_package(
     if not profile_text:
         raise RuntimeError("profile_private has no row 'main'")
     profile = yaml.safe_load(profile_text)
+    if lang == "en":
+        return _run_english(
+            repo, settings, client, notifier, job, job_id, profile,
+            build_pdf=build_pdf, workdir=workdir, today=today,
+        )
 
-    result = create_package(client, settings, profile_text, job, lang)
+    result = create_package(client, settings, profile_text, job)
     # Log the spend right away: a later failure must not hide what the API calls cost.
     for model, u in result.usage:
         repo.log_usage(
@@ -466,20 +457,15 @@ def run_package(
         except Exception:  # the CV still builds without a photo
             result.warnings.append("Foto konnte nicht geladen werden, CV ohne Foto")
 
-    tex = render_cv(profile, result.selection, has_photo=photo is not None, lang=lang)
+    tex = render_cv(profile, result.selection, has_photo=photo is not None)
     cv_pdf = build_pdf(tex, photo, workdir)
-    letter_tex = render_letter(
-        profile, result.cover_letter, job, today or _berlin_today(), lang
-    )
+    letter_tex = render_letter(profile, result.cover_letter, job, today or _berlin_today())
     letter_pdf = build_pdf(letter_tex, None, workdir, "letter")
 
     person = file_slug(profile["person"]["name"])
-    english = lang == "en"
-    cv_name = "Resume" if english else "Lebenslauf"
-    letter_name = "CoverLetter" if english else "Anschreiben"
-    cv_file = _named_copy(cv_pdf, f"{cv_name}_{person}.pdf")
+    cv_file = _named_copy(cv_pdf, f"Lebenslauf_{person}.pdf")
     letter_file = _named_copy(
-        letter_pdf, f"{letter_name}_{file_slug(job['company_name'])}_{person}.pdf"
+        letter_pdf, f"Anschreiben_{file_slug(job['company_name'])}_{person}.pdf"
     )
     label = f"{job['company_name']} – {job['title']}"
     notifier.send_document(cv_file, caption=f"📦 CV für {label}"[:1000])
@@ -498,10 +484,84 @@ def run_package(
             letter_pdf_path=stored_letter,
             cover_letter=result.cover_letter,
             gaps=result.gaps,
+            selection=result.selection,
         )
     except Exception as exc:
         result.warnings.append(f"Speichern in Supabase fehlgeschlagen ({type(exc).__name__})")
     if result.warnings:
         lines = "\n".join(html.escape(w) for w in result.warnings)
         notifier.send("⚠️ <b>Bitte prüfen</b>\n" + lines)
+    return True
+
+
+NO_GERMAN_PACKAGE = (
+    "📦 Für die englische Fassung muss es zuerst ein deutsches Paket mit gespeicherter "
+    "Auswahl geben. Bitte erst auf Deutsch bauen."
+)
+
+
+def _run_english(
+    repo: Any,
+    settings: Settings,
+    client: Any,
+    notifier: PackageNotifier,
+    job: dict[str, Any],
+    job_id: str,
+    profile: dict[str, Any],
+    *,
+    build_pdf: BuildPdf,
+    workdir: Path,
+    today: date | None,
+) -> bool:
+    """Translate the stored German package. The German package stays the master: nothing is
+    written back, so the stored letter and selection are never replaced by the translation."""
+    state = repo.package_state(job_id)
+    letter = ((state or {}).get("cover_letter") or "").strip()
+    selection = (state or {}).get("selection")
+    if not letter or not selection:
+        notifier.send(NO_GERMAN_PACKAGE)
+        return True
+    units = context_units(build_context(profile, selection, False, "de"))
+    units["letter"] = letter
+    english, used = translate_units(client, settings.model_package, units)
+    for model, u in used:
+        repo.log_usage(
+            {
+                "purpose": "package",
+                "model": model,
+                "input_tokens": u.input_tokens,
+                "cache_read_tokens": u.cache_read_tokens,
+                "output_tokens": u.output_tokens,
+                "cost_usd": round(cost_usd(model, u), 6),
+            }
+        )
+    letter_en = english.pop("letter")
+
+    photo: bytes | None = None
+    photo_name = profile.get("person", {}).get("photo")
+    warnings: list[str] = []
+    if photo_name:
+        try:
+            photo = repo.download_asset(PHOTO_BUCKET, photo_name)
+        except Exception:  # the CV still builds without a photo
+            warnings.append("Photo could not be loaded, CV built without it")
+
+    tex = render_cv(
+        profile, selection, has_photo=photo is not None, lang="en",
+        translate=lambda ctx: apply_units(ctx, english),
+    )
+    cv_pdf = build_pdf(tex, photo, workdir)
+    letter_tex = render_letter(profile, letter_en, job, today or _berlin_today(), "en")
+    letter_pdf = build_pdf(letter_tex, None, workdir, "letter")
+
+    person = file_slug(profile["person"]["name"])
+    cv_file = _named_copy(cv_pdf, f"Resume_{person}.pdf")
+    letter_file = _named_copy(
+        letter_pdf, f"CoverLetter_{file_slug(job['company_name'])}_{person}.pdf"
+    )
+    label = f"{job['company_name']} – {job['title']}"
+    notifier.send_document(cv_file, caption=f"📦 Resume (English) für {label}"[:1000])
+    notifier.send_document(letter_file, caption=f"✉️ Cover letter (English) für {label}"[:1000])
+    if warnings:
+        notifier.send("⚠️ " + "; ".join(html.escape(w) for w in warnings))
     return True

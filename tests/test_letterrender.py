@@ -46,3 +46,11 @@ def test_english_letter_has_english_date_subject_and_babel():
     assert r"\usepackage[english]{babel}" in tex
     assert "29 October 2026" in tex and "Application as Software Developer" in tex
     assert "Bewerbung als" not in tex
+
+
+def test_english_letter_for_an_open_application_has_no_job_title_in_the_subject():
+    job = {"company_name": "MDIS Consulting", "title": "Initiativbewerbung", "location": None}
+    tex = render_letter(PROFILE, "Dear Sir or Madam,\n\nHello.", job, date(2026, 10, 29), "en")
+    assert "Unsolicited application" in tex and "Application as" not in tex
+    german = render_letter(PROFILE, "Sehr geehrte Damen und Herren,", job, date(2026, 10, 29))
+    assert "Bewerbung als Initiativbewerbung" in german  # German output is unchanged

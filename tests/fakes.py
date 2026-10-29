@@ -84,9 +84,15 @@ class FakeRepo:
     def upload_asset(self, bucket, path, data, content_type):
         self.uploads[(bucket, path)] = (data, content_type)
 
-    def save_package(self, job_id, *, cv_pdf_path, letter_pdf_path, cover_letter, gaps):
+    def save_package(
+        self, job_id, *, cv_pdf_path, letter_pdf_path, cover_letter, gaps, selection=None
+    ):
         self.packages[job_id] = {"cv_pdf_path": cv_pdf_path, "letter_pdf_path": letter_pdf_path,
-                                 "cover_letter": cover_letter, "gaps": gaps}
+                                 "cover_letter": cover_letter, "gaps": gaps,
+                                 "selection": selection}
+
+    def package_state(self, job_id):
+        return self.packages.get(job_id)
 
     def mark_kind(self, job_ids, kind):
         for job in self.jobs:

@@ -6,6 +6,7 @@ only refer to bullet ids that exist in the profile.
 """
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -152,6 +153,7 @@ def build_context(
     skill_rows = [
         (label, ", ".join(skills[key])) for key, label in t["skill_labels"] if skills.get(key)
     ]
+    tech_rows = len(skill_rows)  # the rows after these hold spoken languages and soft skills
     spoken = profile.get("target", {}).get("languages")
     if spoken:
         skill_rows.append((t["spoken"], ", ".join(spoken)))
@@ -162,6 +164,7 @@ def build_context(
         "person": person,
         "headline": (selection or {}).get("headline") or person.get("headline"),
         "contact_rows": _contact_rows(person, lang), "photo": has_photo, "t": t,
+        "tech_rows": tech_rows,
         "summary": " ".join(str(summary).split()), "experience": experience,
         "education": education, "projects": projects, "skill_rows": skill_rows,
         "other": profile.get("other", []),
@@ -173,6 +176,7 @@ def render_cv(
     selection: dict[str, Any] | None = None,
     has_photo: bool = False,
     lang: str = "de",
+    translate: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> str:
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
@@ -184,4 +188,6 @@ def render_cv(
     env.filters["e"] = latex_escape
     env.filters["eurl"] = _escape_url
     context = build_context(profile, selection, has_photo, lang)
+    if translate:
+        context = translate(context)
     return env.get_template("cv.tex.j2").render(**context)

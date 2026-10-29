@@ -28,7 +28,10 @@ def build_pdf(tex: str, photo: bytes | None, workdir: Path, name: str = "cv") ->
     if photo:
         (workdir / "photo.jpg").write_bytes(photo)
     for cmd in _engine_commands(f"{name}.tex"):
-        run = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=240)
+        run = subprocess.run(
+            cmd, cwd=workdir, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=240,
+        )
         if run.returncode != 0:
             raise RuntimeError("LaTeX build failed: " + error_lines(run.stdout + run.stderr))
     pdf = workdir / f"{name}.pdf"

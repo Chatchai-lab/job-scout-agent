@@ -42,14 +42,19 @@ def render_letter(
     )
     env.filters["e"] = latex_escape
     person = profile["person"]
+    title = " ".join(str(job["title"]).split())
+    unsolicited = lang == "en" and title.lower().startswith("initiativ")
     return env.get_template("letter.tex.j2").render(
         person=person,
         contact_line=_contact_line(person),
         date=english_date(today) if lang == "en" else german_date(today),
         babel="english" if lang == "en" else "ngerman",
-        subject="Application as" if lang == "en" else "Bewerbung als",
+        subject=(
+            "Unsolicited application" if unsolicited
+            else "Application as" if lang == "en" else "Bewerbung als"
+        ),
         company=job["company_name"],
         place=job.get("location") or "",
-        job_title=" ".join(str(job["title"]).split()),
+        job_title="" if unsolicited else title,
         paragraphs=letter_paragraphs(letter_text),
     )

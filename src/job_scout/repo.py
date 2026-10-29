@@ -39,7 +39,11 @@ class Repo(Protocol):
         letter_pdf_path: str,
         cover_letter: str,
         gaps: list[dict[str, str]],
+        selection: dict[str, Any] | None = None,
     ) -> None: ...
+    def package_state(self, job_id: str) -> dict[str, Any] | None:
+        """Stored German package of a job (cover_letter, selection), or None."""
+        ...
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         """One score row joined with its job (same shape as unnotified), or None."""
         ...
@@ -196,6 +200,7 @@ class SupabaseRepo:
         letter_pdf_path: str,
         cover_letter: str,
         gaps: list[dict[str, str]],
+        selection: dict[str, Any] | None = None,
     ) -> None:
         current = self._run(
             self.db.table("applications").select("status").eq("job_id", job_id).limit(1)
@@ -209,9 +214,19 @@ class SupabaseRepo:
             "letter_pdf_path": letter_pdf_path,
             "cover_letter": cover_letter,
             "gaps": gaps,
+            "selection": selection,
             "updated_at": _now(),
         }
         self._run(self.db.table("applications").upsert(row, on_conflict="job_id"))
+
+    def package_state(self, job_id: str) -> dict[str, Any] | None:
+        rows = self._run(
+            self.db.table("applications")
+            .select("cover_letter,selection")
+            .eq("job_id", job_id)
+            .limit(1)
+        ).data
+        return rows[0] if rows else None
 
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         rows = self._run(

@@ -38,3 +38,17 @@ def test_build_error_shows_only_error_lines_never_cv_text(monkeypatch, tmp_path)
         pdfbuild.build_pdf("tex", None, tmp_path)
     assert "Undefined control sequence" in str(err.value)
     assert "Musterstr" not in str(err.value)
+
+
+def test_engine_output_with_odd_bytes_does_not_crash_the_build(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake_run(cmd, cwd, **kw):
+        seen.update(kw)
+        (cwd / "cv.pdf").write_bytes(b"%PDF")
+        return SimpleNamespace(returncode=0, stdout="ok \ufffd", stderr="")
+
+    monkeypatch.setattr(pdfbuild.shutil, "which", lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert pdfbuild.build_pdf("x", None, tmp_path).name == "cv.pdf"
+    assert seen["errors"] == "replace" and seen["encoding"] == "utf-8"

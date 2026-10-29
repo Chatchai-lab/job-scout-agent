@@ -133,3 +133,23 @@ def test_german_cv_is_unchanged_by_default():
     assert "Berufserfahrung" in tex and "seit Juli 2026" in tex
     assert format_range("2025-07", "2026-03", "en") == "July 2025 - March 2026"
     assert format_range("2025-07", "2026-03") == "Juli 2025 - März 2026"
+
+
+def test_translated_context_replaces_texts_but_keeps_everything_else():
+    from job_scout.cvrender import build_context
+    from job_scout.translate import apply_units, context_units
+
+    ctx = build_context(PROFILE, None, False, "de")
+    units = context_units(ctx)
+    assert units["exp.0.b.0"] == "Baute Tools fuer C# und C++."
+    tech = ctx["tech_rows"]
+    assert all(f"skill.{i}" not in units for i in range(tech))  # technology names stay as they are
+    assert f"skill.{tech}" in units  # spoken languages are translated
+    english = {k: "EN " + v for k, v in units.items()}
+    out = apply_units(ctx, english)
+    assert out["experience"][0]["bullets"][0]["text"] == "EN Baute Tools fuer C# und C++."
+    assert out["experience"][0]["company"] == "A & B GmbH"  # names are not translated
+    assert out["education"][0]["degree"] == "EN B.Sc. Informatik"
+    assert out["skill_rows"][0] == ctx["skill_rows"][0]
+    tex = render_cv(PROFILE, None, lang="en", translate=lambda c: apply_units(c, english))
+    assert "EN Baute Tools" in tex and "Work Experience" in tex
