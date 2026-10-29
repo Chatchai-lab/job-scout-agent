@@ -171,7 +171,10 @@ Profil am besten passt. headline und summary nutzen diese Rolle ("Angehender <Ro
 - cover_letter: Betreff-Gedanke "Initiativbewerbung als <Rolle>". Nenne die Firma, aber behaupte \
 NICHTS über die Firma, das nicht in den Angaben unten steht (keine Produkte, Kunden, Werte oder \
 Projekte erfinden). Nenne 2 bis 3 belegte Gründe aus dem Profil, warum der Kandidat für diese \
-Rolle passt, und frage nach einem Gespräch. Frühester Start März 2027.
+Rolle passt, und frage nach einem Gespräch. Start: März 2027, es sei denn, die Angaben zur \
+Firma nennen einen anderen Einstieg (z. B. Vollzeit parallel zur Bachelorarbeit); dann gilt \
+abweichend von den Regeln oben dieser Einstieg, und du nennst nur, was dort steht, ohne ein \
+Datum zu erfinden.
 - gaps: 4 bis 8 typische Anforderungen der Zielrolle (nicht der Firma) mit Status und Begründung \
 aus dem Profil."""
 

@@ -100,7 +100,8 @@ Melde einen Fehler, wenn ein Text Folgendes enthält, das das Profil nicht beleg
 - Aufgaben, die über die Stichpunkte im Profil hinausgehen (Übertreibung zählt)
 Nicht gemeldet wird: die Zielrolle in "headline" und "summary" ("Angehender <Rolle der Stelle>" \
 ist ein Berufsziel, keine behauptete Erfahrung), andere Wortwahl, Umstellung der Reihenfolge, \
-Verweise auf die ausgeschriebene Stelle und die Firma, allgemeine Motivation, Start im März 2027.
+Verweise auf die ausgeschriebene Stelle und die Firma, allgemeine Motivation, Start im März 2027 \
+oder der Einstieg, den die Angaben zur Firma nennen.
 Liste NUR echte Probleme. Ein Punkt, der belegt, unkritisch oder in Ordnung ist, gehört nicht \
 in die Liste. Fasse dich in "problem" auf einen kurzen Satz.
 Gib bei "target" an: headline, summary, cover_letter oder bullet:<id>. Wenn alles belegt ist: \
