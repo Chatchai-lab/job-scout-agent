@@ -166,8 +166,10 @@ def build_draft_system(profile_text: str) -> str:
 INITIATIVE_NOTE = """\
 INITIATIVBEWERBUNG: Es gibt keine ausgeschriebene Stelle. Der Kandidat bewirbt sich aus eigener \
 Initiative bei der Firma unten.
-- Zielrolle: Wähle aus target.roles im Profil die Rolle, die zu den Angaben zur Firma und zum \
-Profil am besten passt. headline und summary nutzen diese Rolle ("Angehender <Rolle>").
+- Zielrolle: Nennen die Angaben zur Firma eine Zielrolle (z. B. "Zielrolle Softwareentwickler"), \
+nutze genau diese und wähle keine andere. Sonst wähle aus target.roles im Profil die Rolle, die zu \
+den Angaben zur Firma und zum Profil am besten passt. headline und summary nutzen diese Rolle \
+("Angehender <Rolle>").
 - cover_letter: Betreff-Gedanke "Initiativbewerbung als <Rolle>". Nenne die Firma, aber behaupte \
 NICHTS über die Firma, das nicht in den Angaben unten steht (keine Produkte, Kunden, Werte oder \
 Projekte erfinden). Nenne 2 bis 3 belegte Gründe aus dem Profil, warum der Kandidat für diese \

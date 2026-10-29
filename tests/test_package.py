@@ -353,3 +353,10 @@ def test_a_second_rewrite_can_still_clean_up_the_letter():
     result, client = _create([_draft()] * 3, [flags, flags, []])
     assert len([c for c in client.calls if c[0] == "submit_package"]) == 3
     assert result.warnings == []
+
+
+def test_initiative_note_lets_the_company_notes_name_the_target_role():
+    from job_scout.package import INITIATIVE_NOTE
+
+    assert "Zielrolle Softwareentwickler" in INITIATIVE_NOTE
+    assert "wähle keine andere" in INITIATIVE_NOTE
