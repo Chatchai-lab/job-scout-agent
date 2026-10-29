@@ -49,6 +49,9 @@ class Repo(Protocol):
     def get_state(self, key: str) -> str | None:
         """Value of an app_state switch, or None if it is not set."""
         ...
+    def set_state(self, key: str, value: str) -> None:
+        """Create or change an app_state value."""
+        ...
     def mark_kind(self, job_ids: list[str], kind: str) -> None:
         """Set jobs.kind (initiative or working_student) for these postings."""
         ...
@@ -71,6 +74,7 @@ class Repo(Protocol):
 
 
 NOTIFICATIONS_PAUSED = "notifications_paused"
+LAST_DIGEST_ON = "last_digest_on"
 
 _PAGE = 1000
 _RETRIES = 3  # extra attempts after a dropped connection (idle HTTP/2 links get closed)
@@ -233,6 +237,10 @@ class SupabaseRepo:
     def get_state(self, key: str) -> str | None:
         rows = self._run(self.db.table("app_state").select("value").eq("key", key)).data
         return rows[0]["value"] if rows else None
+
+    def set_state(self, key: str, value: str) -> None:
+        row = {"key": key, "value": value, "updated_at": _now()}
+        self._run(self.db.table("app_state").upsert(row, on_conflict="key"))
 
     def job_presence(self) -> list[dict[str, Any]]:
         columns = "id,company_id,source,external_id,missing_runs,closed_at"

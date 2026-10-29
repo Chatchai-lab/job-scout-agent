@@ -202,3 +202,17 @@ def test_closed_job_added_by_hand_is_still_hidden():
     row = {**_row(7, 7), "jobs": {"source": "manual", "kind": "posting",
                                   "closed_at": "2026-10-20T00:00:00Z"}}
     assert select_digest([row], s) == []
+
+
+def test_digest_remembers_the_day_so_a_late_scheduled_run_can_skip():
+    from datetime import UTC, datetime
+
+    from job_scout.digest import digest_sent_today
+
+    repo = FakeRepo()
+    notifier = FakeNotifier()
+    assert not digest_sent_today(repo)
+    run_digest(repo, Settings(), notifier)
+    assert digest_sent_today(repo)
+    tomorrow = datetime(2099, 1, 1, 12, tzinfo=UTC)
+    assert not digest_sent_today(repo, tomorrow)

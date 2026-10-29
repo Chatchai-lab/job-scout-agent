@@ -107,6 +107,9 @@ class FakeRepo:
     def get_state(self, key):
         return self.state.get(key)
 
+    def set_state(self, key, value):
+        self.state[key] = value
+
     def job_presence(self):
         return [
             {"missing_runs": 0, "closed_at": None, "company_id": None, **j} for j in self.jobs

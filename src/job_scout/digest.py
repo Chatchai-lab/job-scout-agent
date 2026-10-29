@@ -3,11 +3,12 @@
 import html
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from job_scout.config import Settings
 from job_scout.notify import Notifier, format_job
 from job_scout.prefilter import prefilter
-from job_scout.repo import NOTIFICATIONS_PAUSED, Repo
+from job_scout.repo import LAST_DIGEST_ON, NOTIFICATIONS_PAUSED, Repo
 from job_scout.triage import is_manual, posting_from_row, qualifies
 
 
@@ -83,6 +84,15 @@ def send_reminders(repo: Repo, settings: Settings, notifier: Notifier) -> int:
     return len(due)
 
 
+def _berlin_day(now: datetime | None = None) -> str:
+    return (now or datetime.now(UTC)).astimezone(ZoneInfo("Europe/Berlin")).date().isoformat()
+
+
+def digest_sent_today(repo: Repo, now: datetime | None = None) -> bool:
+    """GitHub may start the scheduled digest hours late or twice around a manual run: one a day."""
+    return repo.get_state(LAST_DIGEST_ON) == _berlin_day(now)
+
+
 def notifications_paused(repo: Repo) -> bool:
     return repo.get_state(NOTIFICATIONS_PAUSED) == "true"
 
@@ -108,6 +118,7 @@ def run_digest(
     else:
         notifier.send("☀️ Heute nichts, das die Schwellen erreicht." + suffix)
     repo.mark_notified([r["job_id"] for r in chosen])
+    repo.set_state(LAST_DIGEST_ON, _berlin_day())
     send_reminders(repo, settings, notifier)
     return len(chosen)
 

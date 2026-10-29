@@ -8,7 +8,7 @@ import anthropic
 import httpx
 
 from job_scout.config import Settings, get_settings
-from job_scout.digest import notifications_paused, resend_job, run_digest
+from job_scout.digest import digest_sent_today, notifications_paused, resend_job, run_digest
 from job_scout.notify import TelegramNotifier
 from job_scout.package import run_package
 from job_scout.pdfbuild import build_pdf
@@ -74,6 +74,9 @@ def run_digest_command(ignore_pause: bool = False) -> None:
     repo = _repo(settings)
     if not ignore_pause and notifications_paused(repo):
         print("Notifications are paused (app_state): digest skipped.")
+        return
+    if not ignore_pause and digest_sent_today(repo):
+        print("A digest was already sent today: skipped.")
         return
     sent = run_digest(repo, settings, notifier, ignore_pause=True)
     print(f"Digest sent with {sent} jobs.")
