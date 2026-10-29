@@ -115,3 +115,21 @@ def test_thesis_line_is_rendered_under_the_degree():
     tex = render_cv(profile)
     assert r"Bachelorarbeit (in Arbeit): Quality-Gates \& LLMs" in tex
     assert "Bachelorarbeit" not in render_cv(PROFILE)
+
+
+def test_english_cv_uses_english_headings_months_and_labels():
+    tex = render_cv(PROFILE, lang="en")
+    assert r"\usepackage[english]{babel}" in tex
+    for heading in ("Work Experience", "Education", "Skills", "Profile", "Personal Projects"):
+        assert heading in tex
+    assert "Berufserfahrung" not in tex and "Ausbildung" not in tex
+    assert "since July 2026" in tex and "July 2025 - March 2026" in tex
+    assert "Phone:" in tex and "Programming languages" in tex and "Focus areas" in tex
+
+
+def test_german_cv_is_unchanged_by_default():
+    tex = render_cv(PROFILE)
+    assert r"\usepackage[ngerman]{babel}" in tex
+    assert "Berufserfahrung" in tex and "seit Juli 2026" in tex
+    assert format_range("2025-07", "2026-03", "en") == "July 2025 - March 2026"
+    assert format_range("2025-07", "2026-03") == "Juli 2025 - März 2026"

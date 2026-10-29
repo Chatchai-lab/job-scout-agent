@@ -15,17 +15,46 @@ TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "templates"
 
 _MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
            "September", "Oktober", "November", "Dezember"]
+_MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August",
+              "September", "October", "November", "December"]
 _LATEX_SPECIAL = {
     "\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#",
     "_": r"\_", "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}",
 }
-_SKILL_LABELS = [
-    ("languages", "Programmiersprachen"),
-    ("tools", "Tools & Frameworks"),
-    ("cicd", "CI/CD"),
-    ("cloud", "Cloud & Hosting"),
-    ("os", "Betriebssysteme"),
-]
+# Fixed wording of the layout per language. The profile's own texts (bullets, projects, thesis)
+# are not translated here.
+LABELS: dict[str, dict[str, Any]] = {
+    "de": {
+        "babel": "ngerman", "months": _MONTHS, "since": "seit",
+        "profile": "Profil", "experience": "Berufserfahrung", "education": "Ausbildung",
+        "skills": "Kenntnisse", "projects": "Private Projekte", "other": "Weitere Erfahrung",
+        "focus": "Schwerpunkte", "spoken": "Sprachen", "soft": "Soft Skills",
+        "skill_labels": [
+            ("languages", "Programmiersprachen"), ("tools", "Tools & Frameworks"),
+            ("cicd", "CI/CD"), ("cloud", "Cloud & Hosting"), ("os", "Betriebssysteme"),
+        ],
+        "contact": {"address": "Adresse", "phone": "Telefon", "email": "E-Mail",
+                    "github": "GitHub", "linkedin": "LinkedIn", "birthdate": "Geburtsdatum",
+                    "nationality": "Nationalität"},
+    },
+    "en": {
+        "babel": "english", "months": _MONTHS_EN, "since": "since",
+        "profile": "Profile", "experience": "Work Experience", "education": "Education",
+        "skills": "Skills", "projects": "Personal Projects", "other": "Additional Experience",
+        "focus": "Focus areas", "spoken": "Languages", "soft": "Soft skills",
+        "skill_labels": [
+            ("languages", "Programming languages"), ("tools", "Tools & frameworks"),
+            ("cicd", "CI/CD"), ("cloud", "Cloud & hosting"), ("os", "Operating systems"),
+        ],
+        "contact": {"address": "Address", "phone": "Phone", "email": "E-mail",
+                    "github": "GitHub", "linkedin": "LinkedIn", "birthdate": "Date of birth",
+                    "nationality": "Nationality"},
+    },
+}
+
+
+def labels_for(lang: str) -> dict[str, Any]:
+    return LABELS.get(lang, LABELS["de"])
 
 
 def latex_escape(text: object) -> str:
@@ -36,17 +65,17 @@ def _escape_url(url: object) -> str:
     return str(url).replace("%", r"\%").replace("#", r"\#")
 
 
-def _month(value: object) -> str:
+def _month(value: object, lang: str = "de") -> str:
     match = re.fullmatch(r"(\d{4})-(\d{2})", str(value))
     if not match:
         return str(value)
-    return f"{_MONTHS[int(match.group(2)) - 1]} {match.group(1)}"
+    return f"{labels_for(lang)['months'][int(match.group(2)) - 1]} {match.group(1)}"
 
 
-def format_range(start: object, end: object) -> str:
+def format_range(start: object, end: object, lang: str = "de") -> str:
     if str(end).lower() == "present":
-        return f"seit {_month(start)}"
-    return f"{_month(start)} - {_month(end)}"
+        return f"{labels_for(lang)['since']} {_month(start, lang)}"
+    return f"{_month(start, lang)} - {_month(end, lang)}"
 
 
 def _link(url: str) -> str:
@@ -54,23 +83,25 @@ def _link(url: str) -> str:
     return rf"\href{{{_escape_url(url)}}}{{{latex_escape(shown)}}}"
 
 
-def _contact_rows(person: dict[str, Any]) -> list[tuple[str, str]]:
+def _contact_rows(person: dict[str, Any], lang: str = "de") -> list[tuple[str, str]]:
+    names = labels_for(lang)["contact"]
     rows: list[tuple[str, str]] = []
     if person.get("address"):
-        rows.append(("Adresse", latex_escape(person["address"])))
+        rows.append((names["address"], latex_escape(person["address"])))
     if person.get("phone"):
-        rows.append(("Telefon", latex_escape(person["phone"])))
+        rows.append((names["phone"], latex_escape(person["phone"])))
     if person.get("email"):
         mail = person["email"]
-        rows.append(("E-Mail", rf"\href{{mailto:{_escape_url(mail)}}}{{{latex_escape(mail)}}}"))
+        link = rf"\href{{mailto:{_escape_url(mail)}}}{{{latex_escape(mail)}}}"
+        rows.append((names["email"], link))
     if person.get("github"):
-        rows.append(("GitHub", _link(person["github"])))
+        rows.append((names["github"], _link(person["github"])))
     if person.get("linkedin"):
-        rows.append(("LinkedIn", _link(person["linkedin"])))
+        rows.append((names["linkedin"], _link(person["linkedin"])))
     if person.get("birthdate"):
-        rows.append(("Geburtsdatum", latex_escape(person["birthdate"])))
+        rows.append((names["birthdate"], latex_escape(person["birthdate"])))
     if person.get("nationality"):
-        rows.append(("Nationalität", latex_escape(person["nationality"])))
+        rows.append((names["nationality"], latex_escape(person["nationality"])))
     return rows
 
 
@@ -85,8 +116,12 @@ def _bullets(entry: dict[str, Any], selection: dict[str, Any] | None) -> list[di
 
 
 def build_context(
-    profile: dict[str, Any], selection: dict[str, Any] | None = None, has_photo: bool = False
+    profile: dict[str, Any],
+    selection: dict[str, Any] | None = None,
+    has_photo: bool = False,
+    lang: str = "de",
 ) -> dict[str, Any]:
+    t = labels_for(lang)
     person = profile["person"]
     experience = []
     for job in profile.get("experience", []):
@@ -95,11 +130,13 @@ def build_context(
             continue
         experience.append({
             "title": job["title"], "company": job["company"], "place": job.get("place", ""),
-            "range": format_range(job["start"], job["end"]), "bullets": bullets,
+            "range": format_range(job["start"], job["end"], lang),
+            "bullets": bullets,
         })
     education = [
         {"degree": e["degree"], "school": e["school"], "focus": e.get("focus"),
-         "thesis": e.get("thesis"), "range": format_range(e["start"], e["end"])}
+         "thesis": e.get("thesis"),
+         "range": format_range(e["start"], e["end"], lang)}
         for e in profile.get("education", [])
     ]
     projects = []
@@ -113,18 +150,18 @@ def build_context(
                              "text": " ".join(b["text"] for b in bullets)})
     skills = profile.get("skills", {})
     skill_rows = [
-        (label, ", ".join(skills[key])) for key, label in _SKILL_LABELS if skills.get(key)
+        (label, ", ".join(skills[key])) for key, label in t["skill_labels"] if skills.get(key)
     ]
     spoken = profile.get("target", {}).get("languages")
     if spoken:
-        skill_rows.append(("Sprachen", ", ".join(spoken)))
+        skill_rows.append((t["spoken"], ", ".join(spoken)))
     if skills.get("soft"):
-        skill_rows.append(("Soft Skills", ", ".join(skills["soft"])))
+        skill_rows.append((t["soft"], ", ".join(skills["soft"])))
     summary = (selection or {}).get("summary") or profile.get("summary", "")
     return {
         "person": person,
         "headline": (selection or {}).get("headline") or person.get("headline"),
-        "contact_rows": _contact_rows(person), "photo": has_photo,
+        "contact_rows": _contact_rows(person, lang), "photo": has_photo, "t": t,
         "summary": " ".join(str(summary).split()), "experience": experience,
         "education": education, "projects": projects, "skill_rows": skill_rows,
         "other": profile.get("other", []),
@@ -132,7 +169,10 @@ def build_context(
 
 
 def render_cv(
-    profile: dict[str, Any], selection: dict[str, Any] | None = None, has_photo: bool = False
+    profile: dict[str, Any],
+    selection: dict[str, Any] | None = None,
+    has_photo: bool = False,
+    lang: str = "de",
 ) -> str:
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
@@ -143,4 +183,5 @@ def render_cv(
     )
     env.filters["e"] = latex_escape
     env.filters["eurl"] = _escape_url
-    return env.get_template("cv.tex.j2").render(**build_context(profile, selection, has_photo))
+    context = build_context(profile, selection, has_photo, lang)
+    return env.get_template("cv.tex.j2").render(**context)

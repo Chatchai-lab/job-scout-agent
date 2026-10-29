@@ -3,7 +3,7 @@
 \usepackage[margin=1.3cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[ngerman]{babel}
+\usepackage[\VAR{ t.babel }]{babel}
 \usepackage{lmodern}
 \usepackage{xcolor}
 \usepackage{graphicx}
@@ -64,10 +64,10 @@
 
 \vspace{0.2cm}
 
-\section*{Profil}
+\section*{\VAR{ t.profile }}
 \VAR{ summary | e }
 
-\section*{Berufserfahrung}
+\section*{\VAR{ t.experience }}
 \BLOCK{ for job in experience }
 
 \textbf{\VAR{ job.title | e } / \VAR{ job.company | e }} \hfill \textcolor{light}{\VAR{ job.range | e }}\\
@@ -83,12 +83,12 @@
 \BLOCK{ endif }
 \BLOCK{ endfor }
 
-\section*{Ausbildung}
+\section*{\VAR{ t.education }}
 \BLOCK{ for ed in education }
 
 \textbf{\VAR{ ed.degree | e }, \VAR{ ed.school | e }} \hfill \textcolor{light}{\VAR{ ed.range | e }}\\
 \BLOCK{ if ed.focus }
-Schwerpunkte: \VAR{ ed.focus | e }\\
+\VAR{ t.focus }: \VAR{ ed.focus | e }\\
 \BLOCK{ endif }
 \BLOCK{ if ed.thesis }
 \VAR{ ed.thesis | e }
@@ -97,7 +97,7 @@ Schwerpunkte: \VAR{ ed.focus | e }\\
 
 \vspace{0.1cm}
 
-\section*{Kenntnisse}
+\section*{\VAR{ t.skills }}
 
 \begin{tabularx}{\textwidth}{>{\bfseries}p{4.2cm}X}
 \BLOCK{ for label, value in skill_rows }
@@ -106,7 +106,7 @@ Schwerpunkte: \VAR{ ed.focus | e }\\
 \end{tabularx}
 \BLOCK{ if projects }
 
-\section*{Private Projekte}
+\section*{\VAR{ t.projects }}
 \BLOCK{ for p in projects }
 
 \textbf{\VAR{ p.name | e }}\BLOCK{ if p.url } \href{\VAR{ p.url | eurl }}{(GitHub Repository)}\BLOCK{ endif }\\
@@ -119,7 +119,7 @@ Schwerpunkte: \VAR{ ed.focus | e }\\
 \BLOCK{ endif }
 \BLOCK{ if other }
 
-\section*{Weitere Erfahrung}
+\section*{\VAR{ t.other }}
 \begin{itemize}
 \BLOCK{ for item in other }
     \item \VAR{ item | e }

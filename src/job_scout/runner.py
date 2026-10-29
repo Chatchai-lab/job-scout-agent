@@ -103,7 +103,7 @@ def error_detail(exc: Exception) -> str:
     return type(exc).__name__
 
 
-def run_package_command(job_id: str) -> None:
+def run_package_command(job_id: str, lang: str = "de") -> None:
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY must be set")
@@ -114,7 +114,8 @@ def run_package_command(job_id: str) -> None:
     workdir = Path(tempfile.mkdtemp(prefix="package-"))
     try:
         found = run_package(
-            _repo(settings), settings, llm, notifier, job_id, build_pdf=build_pdf, workdir=workdir
+            _repo(settings), settings, llm, notifier, job_id, build_pdf=build_pdf, workdir=workdir,
+            lang=lang
         )
     except Exception as exc:
         detail = error_detail(exc)

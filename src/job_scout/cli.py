@@ -28,6 +28,7 @@ def main() -> None:
     imp.add_argument("job_id")
     pkg = sub.add_parser("package", help="Build the application package for one job")
     pkg.add_argument("job_id")
+    pkg.add_argument("--language", choices=["de", "en"], default="de")
 
     args = parser.parse_args()
 
@@ -53,7 +54,7 @@ def main() -> None:
     if args.command == "package":
         from job_scout.runner import run_package_command
 
-        run_package_command(args.job_id)
+        run_package_command(args.job_id, args.language)
         return
 
     if args.command == "import-job":

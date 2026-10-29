@@ -5,11 +5,15 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from job_scout.cvrender import _MONTHS, TEMPLATE_DIR, _escape_url, latex_escape
+from job_scout.cvrender import _MONTHS, _MONTHS_EN, TEMPLATE_DIR, _escape_url, latex_escape
 
 
 def german_date(day: date) -> str:
     return f"{day.day}. {_MONTHS[day.month - 1]} {day.year}"
+
+
+def english_date(day: date) -> str:
+    return f"{day.day} {_MONTHS_EN[day.month - 1]} {day.year}"
 
 
 def letter_paragraphs(text: str) -> list[str]:
@@ -27,7 +31,7 @@ def _contact_line(person: dict[str, Any]) -> str:
 
 
 def render_letter(
-    profile: dict[str, Any], letter_text: str, job: dict[str, Any], today: date
+    profile: dict[str, Any], letter_text: str, job: dict[str, Any], today: date, lang: str = "de"
 ) -> str:
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
@@ -41,7 +45,9 @@ def render_letter(
     return env.get_template("letter.tex.j2").render(
         person=person,
         contact_line=_contact_line(person),
-        date=german_date(today),
+        date=english_date(today) if lang == "en" else german_date(today),
+        babel="english" if lang == "en" else "ngerman",
+        subject="Application as" if lang == "en" else "Bewerbung als",
         company=job["company_name"],
         place=job.get("location") or "",
         job_title=" ".join(str(job["title"]).split()),

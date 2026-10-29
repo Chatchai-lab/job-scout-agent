@@ -214,8 +214,21 @@ def job_text(job: dict[str, Any]) -> str:
     )
 
 
-def build_draft_user(job: dict[str, Any], feedback: list[str] | None) -> str:
+ENGLISH_NOTE = """\
+SPRACHE: ENGLISCH. Abweichend von den Regeln oben schreibst du cover_letter, headline und summary \
+auf Englisch (Anrede "Dear Sir or Madam,", Schluss "Kind regards," und der Name aus dem Profil). \
+headline: "Aspiring <Role>", bei Werkstudentenstellen "Computer Science Student (B.Sc.)" plus \
+Fachgebiet. Beendete Stationen im Past Tense mit Zeitraum. Alle anderen Regeln (nur belegte \
+Fakten, Bachelorarbeit, kein Master, Starttermin) gelten unverändert. Die gaps bleiben deutsch. \
+Die Stichpunkte (rewrites) bleiben in der Sprache des Profils."""
+
+
+def build_draft_user(
+    job: dict[str, Any], feedback: list[str] | None, lang: str = "de"
+) -> str:
     text = f"Heutiges Datum: {date.today().isoformat()}\n\n" + job_text(job)
+    if lang == "en":
+        text += "\n\n" + ENGLISH_NOTE
     if feedback:
         text += (
             "\n\nDie vorige Fassung des Anschreibens enthielt unbelegte Angaben: "
@@ -227,14 +240,14 @@ def build_draft_user(job: dict[str, Any], feedback: list[str] | None) -> str:
 
 def draft_package(
     client: Any, model: str, profile_text: str, job: dict[str, Any],
-    feedback: list[str] | None = None,
+    feedback: list[str] | None = None, lang: str = "de",
 ) -> tuple[Draft, Usage]:
     payload, usage = call_tool(
         client,
         model=model,
         system_text=build_draft_system(profile_text),
         tool=DRAFT_TOOL,
-        user_text=build_draft_user(job, feedback),
+        user_text=build_draft_user(job, feedback, lang),
         max_tokens=16000,  # thinking tokens count against this limit
     )
     return Draft(**payload), usage
@@ -289,7 +302,7 @@ class PackageResult:
 
 
 def create_package(
-    client: Any, settings: Settings, profile_text: str, job: dict[str, Any]
+    client: Any, settings: Settings, profile_text: str, job: dict[str, Any], lang: str = "de"
 ) -> PackageResult:
     profile = yaml.safe_load(profile_text)
     corpus = profile_corpus(profile)
@@ -301,7 +314,9 @@ def create_package(
     feedback: list[str] | None = None
 
     for attempt in range(MAX_ATTEMPTS):
-        draft, u = draft_package(client, settings.model_package, profile_text, job, feedback)
+        draft, u = draft_package(
+            client, settings.model_package, profile_text, job, feedback, lang
+        )
         usage.append((settings.model_package, u))
         selection = build_selection(draft, profile)
         rewrites = selection["rewrites"]
@@ -417,6 +432,7 @@ def run_package(
     build_pdf: BuildPdf,
     workdir: Path,
     today: date | None = None,
+    lang: str = "de",
 ) -> bool:
     """Build and deliver the package for one job. Returns False if the job is unknown."""
     job = repo.package_job(job_id)
@@ -428,7 +444,7 @@ def run_package(
         raise RuntimeError("profile_private has no row 'main'")
     profile = yaml.safe_load(profile_text)
 
-    result = create_package(client, settings, profile_text, job)
+    result = create_package(client, settings, profile_text, job, lang)
     # Log the spend right away: a later failure must not hide what the API calls cost.
     for model, u in result.usage:
         repo.log_usage(
@@ -450,15 +466,20 @@ def run_package(
         except Exception:  # the CV still builds without a photo
             result.warnings.append("Foto konnte nicht geladen werden, CV ohne Foto")
 
-    tex = render_cv(profile, result.selection, has_photo=photo is not None)
+    tex = render_cv(profile, result.selection, has_photo=photo is not None, lang=lang)
     cv_pdf = build_pdf(tex, photo, workdir)
-    letter_tex = render_letter(profile, result.cover_letter, job, today or _berlin_today())
+    letter_tex = render_letter(
+        profile, result.cover_letter, job, today or _berlin_today(), lang
+    )
     letter_pdf = build_pdf(letter_tex, None, workdir, "letter")
 
     person = file_slug(profile["person"]["name"])
-    cv_file = _named_copy(cv_pdf, f"Lebenslauf_{person}.pdf")
+    english = lang == "en"
+    cv_name = "Resume" if english else "Lebenslauf"
+    letter_name = "CoverLetter" if english else "Anschreiben"
+    cv_file = _named_copy(cv_pdf, f"{cv_name}_{person}.pdf")
     letter_file = _named_copy(
-        letter_pdf, f"Anschreiben_{file_slug(job['company_name'])}_{person}.pdf"
+        letter_pdf, f"{letter_name}_{file_slug(job['company_name'])}_{person}.pdf"
     )
     label = f"{job['company_name']} – {job['title']}"
     notifier.send_document(cv_file, caption=f"📦 CV für {label}"[:1000])

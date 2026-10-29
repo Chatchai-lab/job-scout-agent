@@ -360,3 +360,13 @@ def test_initiative_note_lets_the_company_notes_name_the_target_role():
 
     assert "Zielrolle Softwareentwickler" in INITIATIVE_NOTE
     assert "wähle keine andere" in INITIATIVE_NOTE
+
+
+def test_english_note_is_added_only_for_english_packages():
+    from job_scout.package import ENGLISH_NOTE, build_draft_user
+
+    job = {"company_name": "MDIS Consulting", "title": "Initiativbewerbung", "url": "",
+           "description": "x", "kind": "initiative"}
+    assert ENGLISH_NOTE not in build_draft_user(job, None)
+    text = build_draft_user(job, None, "en")
+    assert ENGLISH_NOTE in text and "Dear Sir or Madam" in text and "gaps bleiben deutsch" in text

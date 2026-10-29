@@ -7,6 +7,11 @@ on:
         description: Job id (uuid) to build the application package for
         type: string
         required: true
+      language:
+        description: Language of the letter and the CV headings (de or en)
+        type: choice
+        options: [de, en]
+        default: de
 
 concurrency:
   group: package-${{ inputs.job_id }}
@@ -30,9 +35,10 @@ jobs:
             texlive-fonts-recommended texlive-lang-german lmodern
       - run: pip install -e .
       - name: Build and send package
-        run: job-scout package "$JOB_ID"
+        run: job-scout package "$JOB_ID" --language "$LANGUAGE"
         env:
           JOB_ID: ${{ inputs.job_id }}
+          LANGUAGE: ${{ inputs.language || 'de' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
