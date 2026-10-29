@@ -7,6 +7,9 @@ import { LIMITS, NOT_FULL_TIME, STATUS } from "./applications.js";
 // Mirrors config.py (working_student_fit_threshold).
 export const WORKING_STUDENT_FIT = 3;
 const KINDS = ["posting", "working_student"];
+const JOB_COLUMNS =
+  "fit,reach,ring,reason,start_ok,notified_at," +
+  "jobs!inner(id,company_name,title,location,remote,url,kind,source,closed_at,first_seen_at)";
 
 // Compare through a hash so the length of the password never leaks and the compare is constant-time.
 export function authorized(provided, expected) {
@@ -18,6 +21,7 @@ export function authorized(provided, expected) {
 export function qualifies(score) {
   const job = score.jobs;
   if (!job || job.closed_at) return false;
+  if (job.source === "manual" && job.kind === "posting") return true; // added by hand: always shown
   if (score.ring === "raus" || score.start_ok === false) return false;
   if (score.reach < LIMITS.reach) return false;
   if (job.kind === "working_student") return score.fit >= WORKING_STUDENT_FIT;
@@ -34,6 +38,7 @@ export function jobEntry(score) {
     location: job.location ?? "",
     remote: Boolean(job.remote),
     kind: job.kind,
+    manual: job.source === "manual",
     url: job.url,
     fit: score.fit,
     reach: score.reach,
@@ -62,7 +67,12 @@ export function buildDashboard({ scores, apps, initiatives, cost, counts, paused
   const jobs = scores
     .filter(qualifies)
     .map(jobEntry)
-    .sort((a, b) => b.fit * b.reach - a.fit * a.reach || a.company.localeCompare(b.company));
+    .sort(
+      (a, b) =>
+        Number(b.manual) - Number(a.manual) ||
+        b.fit * b.reach - a.fit * a.reach ||
+        a.company.localeCompare(b.company),
+    );
   const applications = apps.filter((a) => a.jobs).map(applicationEntry);
   const statuses = {};
   for (const a of applications) statuses[a.status] = (statuses[a.status] ?? 0) + 1;
@@ -117,12 +127,15 @@ export function makeDashboardDb(env, fetchFn) {
   return {
     async load() {
       const month = `${new Date().toISOString().slice(0, 7)}-01`;
-      const [scores, apps, initiatives, cost, companies, openJobs, paused] = await Promise.all([
+      const [scored, manual, apps, initiatives, cost, companies, openJobs, paused] = await Promise.all([
         rows(
-          "scores?select=fit,reach,ring,reason,start_ok,notified_at," +
-            "jobs!inner(id,company_name,title,location,remote,url,kind,closed_at,first_seen_at)" +
+          `scores?select=${JOB_COLUMNS}` +
             `&reach=gte.${LIMITS.reach}&fit=gte.${WORKING_STUDENT_FIT}&ring=neq.raus` +
             `&jobs.closed_at=is.null&jobs.kind=in.(${KINDS.join(",")})&limit=1000`,
+        ),
+        rows(
+          `scores?select=${JOB_COLUMNS}&jobs.source=eq.manual&jobs.kind=eq.posting` +
+            "&jobs.closed_at=is.null&limit=200",
         ),
         rows(
           "applications?select=job_id,status,applied_at,updated_at,cv_pdf_path," +
@@ -137,6 +150,8 @@ export function makeDashboardDb(env, fetchFn) {
         count("jobs?closed_at=is.null&kind=eq.posting&select=id"),
         rows("app_state?select=value&key=eq.notifications_paused"),
       ]);
+      const seen = new Set(scored.map((r) => r.jobs.id));
+      const scores = [...scored, ...manual.filter((r) => !seen.has(r.jobs.id))];
       return {
         scores,
         apps,

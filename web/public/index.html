@@ -151,6 +151,7 @@ function jobCard(j) {
       h("div", {}, h("div", { class: "company" }, j.company), h("div", { class: "title" }, j.title)),
       h("div", { class: "score" }, `${j.fit}/${j.reach}`)),
     h("div", { class: "meta" },
+      j.manual ? [h("span", { class: "badge" }, "Selbst gefunden"), " "] : null,
       j.kind === "working_student" ? h("span", { class: "badge ws" }, "Werkstudent") : null,
       j.kind === "working_student" ? " " : "",
       [j.location || (j.remote ? "Remote" : ""), j.ring ? `Ring: ${j.ring}` : ""].filter(Boolean).join(" · "),

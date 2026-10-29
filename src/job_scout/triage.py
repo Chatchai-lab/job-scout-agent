@@ -71,7 +71,14 @@ def posting_from_row(row: dict[str, Any]) -> JobPosting:
     )
 
 
+def is_manual(score: dict[str, Any]) -> bool:
+    """Jobs the user added by hand (link or pasted text) always count, whatever the score."""
+    return (score.get("jobs") or {}).get("source") == "manual"
+
+
 def qualifies(score: dict[str, Any], settings: Settings) -> bool:
+    if is_manual(score):
+        return True
     working_student = (score.get("jobs") or {}).get("kind") == "working_student"
     fit_min = settings.working_student_fit_threshold if working_student else settings.fit_threshold
     return (

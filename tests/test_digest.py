@@ -183,3 +183,22 @@ def test_working_student_jobs_qualify_with_a_lower_fit():
     assert not qualifies(row, s)
     assert qualifies({**row, "jobs": {"kind": "working_student"}}, s)
     assert not qualifies({**_row(2, 9), "jobs": {"kind": "working_student"}}, s)
+
+
+def test_jobs_added_by_hand_always_qualify_and_come_first():
+    s = Settings(digest_max_jobs=2)
+    manual = {**_row(2, 2, ring="raus", start_ok=False),
+              "jobs": {"source": "manual", "kind": "posting", "closed_at": None,
+                       "title": "Senior Engineer", "company_name": "X", "url": "u",
+                       "external_id": "e", "location": "Tokyo"}}
+    assert qualifies(manual, s)
+    other = [_row(9, 9), _row(8, 8)]
+    chosen = select_digest(other + [manual], s)
+    assert chosen[0] is manual and len(chosen) == 2
+
+
+def test_closed_job_added_by_hand_is_still_hidden():
+    s = Settings()
+    row = {**_row(7, 7), "jobs": {"source": "manual", "kind": "posting",
+                                  "closed_at": "2026-10-20T00:00:00Z"}}
+    assert select_digest([row], s) == []

@@ -16,12 +16,12 @@ from pydantic import BaseModel
 
 from job_scout.config import Settings
 from job_scout.models import JobPosting
-from job_scout.notify import Notifier, format_job
+from job_scout.notify import Notifier
 from job_scout.prefilter import WORKING_STUDENT_TITLE
 from job_scout.pricing import Usage, cost_usd
 from job_scout.repo import Repo
 from job_scout.scoring import ScoreResult, build_system, usage_from
-from job_scout.triage import posting_from_row
+from job_scout.triage import posting_from_row, qualifies
 
 log = logging.getLogger(__name__)
 
@@ -179,6 +179,24 @@ def _log_usage(repo: Repo, settings: Settings, purpose: str, usage: Usage, cost:
     )
 
 
+def _summary(
+    prefix: str, job: dict[str, Any], score: dict[str, Any], settings: Settings
+) -> str:
+    """One plain line (no buttons): what was stored and whether the digest will show it."""
+    place = f", {job['location']}" if job.get("location") else ""
+    shown = qualifies({**score, "jobs": job}, settings)
+    outcome = (
+        "Sie erscheint im nächsten Digest."
+        if shown
+        else "Sie liegt unter den Schwellen und erscheint nicht im Digest."
+    )
+    return (
+        f"{prefix}: {html.escape(job['title'])} "
+        f"({html.escape(job['company_name'])}{html.escape(place)}) "
+        f"– Fit {score['fit']}/10, Reach {score['reach']}/10. {outcome}"
+    )
+
+
 def run_import(
     repo: Repo,
     settings: Settings,
@@ -196,7 +214,7 @@ def run_import(
         return "unknown"
     known = repo.scored_job(job_id)
     if known is not None and not known["jobs"].get("closed_at"):
-        notifier.send("🔁 " + format_job(known["jobs"], known), job_id)
+        notifier.send(_summary("🔁 Diese Stelle habe ich schon", known["jobs"], known, settings))
         return "resent"
 
     budget_usd = settings.monthly_budget_eur / settings.eur_per_usd
@@ -243,8 +261,8 @@ def run_import(
          "cost_usd": round(cost, 6)}
     )
     _log_usage(repo, settings, "match", usage, cost)
-    repo.mark_notified([job_id])  # the card below is the notification, not the digest
+    # No card and no notified mark: the digest shows the job like any other.
     scored = repo.scored_job(job_id)
     if scored is not None:
-        notifier.send("🔗 " + format_job(scored["jobs"], scored), job_id)
+        notifier.send(_summary("✅ Aufgenommen", scored["jobs"], scored, settings))
     return "sent"

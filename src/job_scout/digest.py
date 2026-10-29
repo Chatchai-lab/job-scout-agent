@@ -8,7 +8,7 @@ from job_scout.config import Settings
 from job_scout.notify import Notifier, format_job
 from job_scout.prefilter import prefilter
 from job_scout.repo import NOTIFICATIONS_PAUSED, Repo
-from job_scout.triage import posting_from_row, qualifies
+from job_scout.triage import is_manual, posting_from_row, qualifies
 
 
 def _still_allowed(row: dict[str, Any], settings: Settings) -> bool:
@@ -18,6 +18,8 @@ def _still_allowed(row: dict[str, Any], settings: Settings) -> bool:
         return True
     if job.get("closed_at"):
         return False  # the posting is gone from the company board
+    if job.get("source") == "manual":
+        return True  # chosen by hand: no rule may hide it
     reason = prefilter(
         posting_from_row(job),
         include_abroad=settings.include_abroad,
@@ -28,7 +30,7 @@ def _still_allowed(row: dict[str, Any], settings: Settings) -> bool:
 
 def select_digest(rows: list[dict[str, Any]], settings: Settings) -> list[dict[str, Any]]:
     good = [r for r in rows if qualifies(r, settings) and _still_allowed(r, settings)]
-    good.sort(key=lambda r: r["fit"] * r["reach"], reverse=True)
+    good.sort(key=lambda r: (is_manual(r), r["fit"] * r["reach"]), reverse=True)  # own finds first
     return good[: settings.digest_max_jobs]
 
 

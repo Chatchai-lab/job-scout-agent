@@ -94,11 +94,23 @@ test("db loader asks Supabase for the right tables with the service key", async 
   assert.deepEqual(data.counts, { companies: 42, openJobs: 42 });
   assert.ok(calls.every((c) => c.key === "k"));
   const tables = calls.map((c) => c.url.split("/rest/v1/")[1].split("?")[0]).sort();
-  assert.deepEqual(tables, ["app_state", "applications", "companies", "jobs", "jobs", "monthly_cost", "scores"]);
+  assert.deepEqual(tables, ["app_state", "applications", "companies", "jobs", "jobs", "monthly_cost", "scores", "scores"]);
 });
 
 test("db loader fails loudly when Supabase answers with an error", async () => {
   const fetchFn = async () => ({ ok: false, status: 500, headers: { get: () => "" }, json: async () => [] });
   const db = makeDashboardDb({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_KEY: "k" }, fetchFn);
   await assert.rejects(db.load(), /supabase/);
+});
+
+test("jobs added by hand always show, first, even with a low score", () => {
+  const manual = score({ fit: 2, reach: 2, ring: "raus" }, { id: "m", company_name: "Handarbeit", source: "manual" });
+  assert.equal(qualifies(manual), true);
+  assert.equal(qualifies(score({ fit: 2, reach: 2 }, { source: "manual", closed_at: "2026-10-20T00:00:00Z" })), false);
+  const data = buildDashboard({
+    scores: [score({ fit: 9, reach: 9 }, { id: "a", company_name: "Alpha" }), manual],
+    apps: [], initiatives: [], cost: "0", counts: { companies: 1, openJobs: 1 }, paused: false,
+  });
+  assert.deepEqual(data.jobs.map((j) => j.company), ["Handarbeit", "Alpha"]);
+  assert.equal(data.jobs[0].manual, true);
 });

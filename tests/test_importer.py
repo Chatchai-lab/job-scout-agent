@@ -78,7 +78,9 @@ def test_link_is_read_scored_and_sent_with_buttons():
     assert job["dedup_key"].startswith("beispiel")
     assert job_id in repo.scores
     text, sent_id = notifier.sent[-1]
-    assert sent_id == job_id and "Beispiel GmbH" in text and "Fit 7/10" in text
+    assert sent_id is None, "no card with buttons, the digest shows the job"
+    assert "Beispiel GmbH" in text and "Fit 7/10" in text and "Digest" in text
+    assert repo.scores[job_id]["notified_at"] is None
     # llm_usage only allows match, package and feedback as purpose
     assert [u["purpose"] for u in repo.usage] == ["match", "match"]
 
@@ -120,7 +122,7 @@ def test_already_imported_job_is_sent_again_without_new_calls():
     run(repo, job_id, notifier)
     outcome, calls = run(repo, job_id, notifier)
     assert outcome == "resent" and calls == {"fetch": 0, "read": 0, "score": 0}
-    assert notifier.sent[-1][0].startswith("🔁")
+    assert notifier.sent[-1][0].startswith("🔁") and notifier.sent[-1][1] is None
 
 
 def test_budget_stops_the_import():
@@ -164,3 +166,10 @@ def test_fetch_page_rejects_non_http_links_and_non_html():
             fetch_page(client, "file:///etc/passwd")
         with pytest.raises(ValueError):
             fetch_page(client, "https://firma.de/job.pdf")
+
+
+def test_job_added_by_hand_counts_even_below_the_thresholds():
+    repo, job_id, notifier = setup()
+    run(repo, job_id, notifier, score=result(fit=4, reach=4))
+    assert "erscheint im nächsten Digest" in notifier.sent[-1][0]
+    assert repo.scores[job_id]["notified_at"] is None
