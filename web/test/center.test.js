@@ -254,3 +254,21 @@ test("/status sends the snapshot", async () => {
   assert.equal(await handleUpdate(message("/status"), f), "status");
   assert.ok(find(f.calls, "send")[1].includes("Job Scout – Status"));
 });
+
+test("initiative card shows the status and a way to change it once an application exists", () => {
+  const plain = initiativeCard(init(A)).markup.inline_keyboard.flat();
+  assert.ok(!plain.some((b) => b.callback_data === `app:${A}`));
+  const withApp = initiativeCard(init(A), { status: "paket" });
+  assert.ok(withApp.text.includes("Status: 📦 Paket gebaut"));
+  assert.ok(withApp.markup.inline_keyboard.flat().some((b) => b.callback_data === `app:${A}`));
+});
+
+test("application card of an open application has no empty ad-link button", () => {
+  const noUrl = cardView(app(A, "paket", { jobs: { company_name: "MDIS", title: "Initiativbewerbung", url: "" } }));
+  const buttons = noUrl.markup.inline_keyboard.flat();
+  assert.ok(!buttons.some((b) => "url" in b), "Telegram rejects an empty url");
+  assert.ok(buttons.some((b) => b.callback_data === `st:beworben:${A}`));
+  assert.ok(buttons.some((b) => b.callback_data === "apps"));
+  const withUrl = cardView(app(A, "paket")).markup.inline_keyboard.flat();
+  assert.ok(withUrl.some((b) => b.url === "https://example.com/j"));
+});

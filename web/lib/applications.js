@@ -94,10 +94,10 @@ export function cardView(app) {
       { text: "✉️ Anschreiben senden", callback_data: `ltr:${app.job_id}` },
     ]);
   }
-  rows.push([
-    { text: "🔗 Anzeige", url: job.url },
-    { text: "⬅️ Liste", callback_data: "apps" },
-  ]);
+  const links = [];
+  if (/^https?:\/\//.test(job.url ?? "")) links.push({ text: "🔗 Anzeige", url: job.url });
+  links.push({ text: "⬅️ Liste", callback_data: "apps" });
+  rows.push(links); // an open application has no ad link, and Telegram rejects an empty url
   return { text: lines.join("\n"), markup: { inline_keyboard: rows } };
 }
 
@@ -134,11 +134,15 @@ export function initiativeListView(allJobs) {
   };
 }
 
-export function initiativeCard(job) {
+export function initiativeCard(job, app = null) {
   const lines = [`✉️ <b>Initiativbewerbung</b>`, esc(job.company_name.trim())];
   if (job.location) lines.push(`📍 ${esc(job.location)}`);
   if (job.description) lines.push("", esc(short(job.description.trim(), 400)));
   const rows = [[{ text: "📦 Paket", callback_data: `pkg:${job.id}` }]];
+  if (app && STATUS[app.status]) {
+    lines.push("", `Status: ${STATUS[app.status].icon} ${STATUS[app.status].label}`);
+    rows.push([{ text: "📋 Bewerbungsstand ändern", callback_data: `app:${job.id}` }]);
+  }
   const links = [];
   if (/^https?:\/\//.test(job.url ?? "")) links.push({ text: "🔗 Seite", url: job.url });
   links.push({ text: "⬅️ Liste", callback_data: "inis" });

@@ -456,7 +456,7 @@ export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new
         await tg.answer(cq.id, "Diese Firma gibt es nicht mehr.", true);
         return "initiative_missing";
       }
-      const view = initiativeCard(job);
+      const view = initiativeCard(job, await db.getApplication(cmd.jobId));
       await tg.edit(msg.chat.id, msg.message_id, view.text, view.markup);
       await tg.answer(cq.id, "");
       return "initiative_card";
