@@ -247,3 +247,23 @@ export function makeDetailDb(env, fetchFn) {
     },
   };
 }
+
+// Starts the package workflow from the app. English is a translation, so it needs a German
+// package with a stored selection first. The 5 minute cooldown matches the Telegram button.
+export async function startPackage({ db, gh, id, language, now = () => new Date(), cooldownMs }) {
+  if (!isUuid(id) || !["de", "en"].includes(language)) return { code: 400, body: { error: "bad request" } };
+  if (!gh.configured) return { code: 503, body: { error: "Paket-Funktion nicht eingerichtet" } };
+  if (language === "en") {
+    const app = await db.getApplication(id);
+    if (!app?.cv_pdf_path || !app.selection) {
+      return { code: 409, body: { error: "Zuerst ein deutsches Paket bauen." } };
+    }
+  }
+  const last = await db.lastDecisionAt(id, "package");
+  if (last && now() - last < cooldownMs) {
+    return { code: 429, body: { error: "Das Paket wird schon gebaut. Es kommt gleich." } };
+  }
+  await gh.dispatchPackage(id, language);
+  await db.addDecision(id, "package");
+  return { code: 200, body: { ok: true } };
+}

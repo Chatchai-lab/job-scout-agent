@@ -128,7 +128,7 @@ test("makeGithub posts the dispatch with the token, the job id and only this rep
   await gh.dispatchPackage(JOB);
   assert.ok(seen.url.endsWith("/actions/workflows/package.yml/dispatches"));
   assert.equal(seen.init.headers.Authorization, "Bearer t0k");
-  assert.deepEqual(JSON.parse(seen.init.body), { ref: "main", inputs: { job_id: JOB } });
+  assert.deepEqual(JSON.parse(seen.init.body), { ref: "main", inputs: { job_id: JOB, language: "de" } });
   assert.equal(makeGithub({}, fetchFn).configured, false);
   await assert.rejects(() => makeGithub({ GITHUB_DISPATCH_TOKEN: "x" }, async () => ({ status: 404 })).dispatchPackage(JOB));
 });

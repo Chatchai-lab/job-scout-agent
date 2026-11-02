@@ -4,7 +4,8 @@ import { test } from "node:test";
 import file from "../api/file.js";
 import application from "../api/application.js";
 import status from "../api/status.js";
-import { applicationDetail, guard, isUuid, makeDetailDb } from "../lib/dashboard.js";
+import { applicationDetail, guard, isUuid, makeDetailDb, startPackage } from "../lib/dashboard.js";
+import { makeGithub } from "../lib/handler.js";
 
 const ID = "123e4567-e89b-42d3-a456-426614174000";
 const ENV = { SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_KEY: "svc", DASHBOARD_PASSWORD: "geheim" };
@@ -134,4 +135,58 @@ test("/api/status changes the status of an existing application only", async () 
     await status(req({ method: "GET" }), wrongMethod);
     assert.equal(wrongMethod.code, 405);
   });
+});
+
+function packageFakes({ app = { cv_pdf_path: "p.pdf", selection: { headline: "x" } }, last = null, configured = true } = {}) {
+  const calls = [];
+  return {
+    calls,
+    db: {
+      getApplication: async () => app,
+      lastDecisionAt: async () => last,
+      addDecision: async (id, action) => calls.push(["decision", id, action]),
+    },
+    gh: { configured, dispatchPackage: async (id, lang) => calls.push(["dispatch", id, lang]) },
+  };
+}
+const COOLDOWN = 5 * 60 * 1000;
+
+test("startPackage builds German for any job and records the decision", async () => {
+  const f = packageFakes({ app: null });
+  const r = await startPackage({ ...f, id: ID, language: "de", cooldownMs: COOLDOWN });
+  assert.equal(r.code, 200);
+  assert.deepEqual(f.calls, [["dispatch", ID, "de"], ["decision", ID, "package"]]);
+});
+
+test("startPackage builds English only on top of a stored German package", async () => {
+  const ok = packageFakes();
+  assert.equal((await startPackage({ ...ok, id: ID, language: "en", cooldownMs: COOLDOWN })).code, 200);
+  assert.deepEqual(ok.calls[0], ["dispatch", ID, "en"]);
+  for (const app of [null, { cv_pdf_path: "p.pdf", selection: null }, { cv_pdf_path: null, selection: {} }]) {
+    const f = packageFakes({ app });
+    const r = await startPackage({ ...f, id: ID, language: "en", cooldownMs: COOLDOWN });
+    assert.equal(r.code, 409);
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test("startPackage respects the cooldown, the setup and bad input", async () => {
+  const now = () => new Date("2026-11-02T12:00:00Z");
+  const busy = packageFakes({ last: new Date("2026-11-02T11:58:00Z") });
+  assert.equal((await startPackage({ ...busy, id: ID, language: "de", now, cooldownMs: COOLDOWN })).code, 429);
+  assert.equal(busy.calls.length, 0);
+  const idle = packageFakes({ last: new Date("2026-11-02T11:50:00Z") });
+  assert.equal((await startPackage({ ...idle, id: ID, language: "de", now, cooldownMs: COOLDOWN })).code, 200);
+  assert.equal((await startPackage({ ...packageFakes({ configured: false }), id: ID, language: "de", cooldownMs: COOLDOWN })).code, 503);
+  assert.equal((await startPackage({ ...packageFakes(), id: "nope", language: "de", cooldownMs: COOLDOWN })).code, 400);
+  assert.equal((await startPackage({ ...packageFakes(), id: ID, language: "fr", cooldownMs: COOLDOWN })).code, 400);
+});
+
+test("the package workflow gets the language as input", async () => {
+  let body;
+  const gh = makeGithub({ GITHUB_DISPATCH_TOKEN: "t" }, async (url, init) => { body = JSON.parse(init.body); return { status: 204 }; });
+  await gh.dispatchPackage(ID, "en");
+  assert.deepEqual(body.inputs, { job_id: ID, language: "en" });
+  await gh.dispatchPackage(ID);
+  assert.equal(body.inputs.language, "de");
 });

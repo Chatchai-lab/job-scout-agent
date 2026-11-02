@@ -284,7 +284,7 @@ export function makeDb(env, fetchFn) {
 // Starts the "Package" workflow for one job. The token needs "Actions: write" on this repo only.
 export function makeGithub(env, fetchFn) {
   const repo = env.GITHUB_REPOSITORY || "Chatchai-lab/job-scout-agent";
-  const dispatch = async (workflow, jobId) => {
+  const dispatch = async (workflow, jobId, extra = {}) => {
     const res = await fetchFn(
       `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`,
       {
@@ -295,14 +295,14 @@ export function makeGithub(env, fetchFn) {
           "X-GitHub-Api-Version": "2022-11-28",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ref: "main", inputs: { job_id: jobId } }),
+        body: JSON.stringify({ ref: "main", inputs: { job_id: jobId, ...extra } }),
       },
     );
     if (res.status !== 204) throw new Error(`github dispatch -> ${res.status}`);
   };
   return {
     configured: Boolean(env.GITHUB_DISPATCH_TOKEN),
-    dispatchPackage: (jobId) => dispatch("package.yml", jobId),
+    dispatchPackage: (jobId, language = "de") => dispatch("package.yml", jobId, { language }),
     dispatchImport: (jobId) => dispatch("import-job.yml", jobId),
   };
 }

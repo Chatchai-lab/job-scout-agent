@@ -167,7 +167,9 @@ function jobCard(j) {
       [j.location || (j.remote ? "Remote" : ""), j.ring ? `Ring: ${j.ring}` : ""].filter(Boolean).join(" · "),
       !j.seen ? [" ", h("span", { class: "pill-new" }, "● neu")] : null),
   ];
-  return h("div", { class: "card" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+  const build = h("button", { class: "chip", type: "button" }, "📦 Paket bauen");
+  build.addEventListener("click", () => startBuild(j.id, "de", false));
+  return h("div", { class: "card" }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body, h("div", { class: "statusrow" }, build));
 }
 
 function appCard(a) {
@@ -286,8 +288,28 @@ async function api(path, options = {}) {
     cache: "no-store",
   });
   if (res.status === 401) { store.del("pw"); showLogin("Passwort falsch."); throw new Error("unauthorized"); }
-  if (!res.ok) throw new Error(String(res.status));
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || String(res.status));
+  return body;
+}
+
+function pollDetail(id) {
+  let n = 0;
+  const timer = setInterval(() => {
+    n += 1;
+    if (state.detail !== id || n > 12) { clearInterval(timer); return; }
+    render(true);
+  }, 20000);
+}
+
+async function startBuild(id, language, stay) {
+  try {
+    await api("/api/package", { method: "POST", body: JSON.stringify({ id, language }) });
+    toast(language === "en" ? "Englisches Paket wird gebaut. Es dauert 2 bis 3 Minuten." : "Paket wird gebaut. Es dauert 2 bis 3 Minuten.");
+    if (stay) pollDetail(id);
+  } catch (err) {
+    toast(err.message.length > 90 ? "Das Paket konnte nicht gestartet werden." : err.message);
+  }
 }
 
 async function openFile(id, kind) {
@@ -353,6 +375,12 @@ async function renderDetail(id) {
   ].filter(Boolean);
   view.append(h("div", { class: "group" }, "Unterlagen"));
   view.append(...(files.length ? files : [h("p", { class: "empty" }, "Noch kein Paket gebaut.")]));
+  const buildDe = h("button", { class: "btn", type: "button" }, d.files.cv ? "🔄 Deutsches Paket neu bauen" : "📦 Paket bauen (Deutsch)");
+  buildDe.addEventListener("click", () => startBuild(d.id, "de", true));
+  const buildEn = h("button", { class: "btn", type: "button", disabled: d.files.cv ? null : "disabled" }, d.files.cv_en ? "🇬🇧 Englische Fassung neu bauen" : "🇬🇧 Auf Englisch bauen");
+  buildEn.addEventListener("click", () => startBuild(d.id, "en", true));
+  view.append(buildDe, buildEn);
+  if (!d.files.cv) view.append(h("p", { class: "sub" }, "Englisch ist eine Übersetzung des deutschen Pakets. Baue zuerst das deutsche."));
   const link = safeUrl(d.url);
   if (link) view.append(h("a", { class: "btn primary", href: link, target: "_blank", rel: "noopener noreferrer" }, "🔗 Anzeige öffnen"));
 
@@ -376,7 +404,7 @@ function routeFromHash() {
   state.detail = m ? m[1] : null;
 }
 
-async function render() {
+async function render(keepScroll = false) {
   routeFromHash();
   if (state.detail) {
     $("head-title").textContent = "Bewerbung";
@@ -385,7 +413,7 @@ async function render() {
     const id = state.detail;
     const content = await renderDetail(id);
     if (state.detail === id) $("view").replaceChildren(content);
-    window.scrollTo(0, 0);
+    if (!keepScroll) window.scrollTo(0, 0);
     return;
   }
   $("head-title").textContent = TITLES[state.tab];
