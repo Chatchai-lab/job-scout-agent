@@ -19,8 +19,9 @@ def test_start_warning_and_salary_shown():
 
 
 def test_keyboard_carries_job_id_in_all_three_buttons():
-    buttons = keyboard("abc")["inline_keyboard"][0]
-    assert [b["callback_data"] for b in buttons] == ["pkg:abc", "save:abc", "rej:abc"]
+    rows = keyboard("abc")["inline_keyboard"]
+    assert [b["callback_data"] for b in rows[0]] == ["pkg:abc", "save:abc", "rej:abc"]
+    assert [b["callback_data"] for b in rows[1]] == ["applied:abc"]  # mark as applied directly
 
 
 def test_send_document_uploads_the_file_with_caption(tmp_path):

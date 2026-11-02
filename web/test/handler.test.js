@@ -13,8 +13,12 @@ import {
 const JOB = "123e4567-e89b-42d3-a456-426614174000";
 const CHAT = "1234567890";
 
-function fakes({ existing = [], lastPackage = null, githubOk = true, configured = true } = {}) {
+let application = null;
+function fakes({
+  existing = [], lastPackage = null, githubOk = true, configured = true, current = null,
+} = {}) {
   const calls = [];
+  application = current;
   const gh = {
     configured,
     dispatchPackage: async (id) => {
@@ -28,6 +32,8 @@ function fakes({ existing = [], lastPackage = null, githubOk = true, configured 
     addDecision: async (id, action) => calls.push(["add", id, action]),
     setReason: async (id, tag) => calls.push(["reason", id, tag]),
     markSaved: async (id) => calls.push(["saved", id]),
+    markApplied: async (id) => calls.push(["markApplied", id]),
+    getApplication: async () => application,
     removeDecisions: async (id) => calls.push(["removed", id]),
   };
   const tg = {
@@ -181,4 +187,43 @@ test("makeDb undo deletes only save and reject decisions and the tracker row", a
   assert.ok(seen[0][1].includes("decisions?") && seen[0][1].includes("action=in.(save,reject)"));
   assert.ok(seen[1][1].includes("applications?") && seen[1][1].includes("status=eq.gemerkt"));
   assert.ok(seen.every(([method]) => method === "DELETE"));
+});
+
+test("every job message has an 'applied' button in its own row", () => {
+  const rows = jobKeyboard(JOB).inline_keyboard;
+  assert.deepEqual(rows[0].map((b) => b.callback_data), [`pkg:${JOB}`, `save:${JOB}`, `rej:${JOB}`]);
+  assert.deepEqual(rows[1].map((b) => b.callback_data), [`applied:${JOB}`]);
+  assert.deepEqual(parseCallback(`applied:${JOB}`), { kind: "applied", jobId: JOB });
+  assert.ok(`applied:${JOB}`.length <= 64, "Telegram limits callback data to 64 bytes");
+});
+
+test("the applied button marks the job as applied and offers the application card", async () => {
+  const f = fakes();
+  assert.equal(await handleUpdate(update(`applied:${JOB}`), f), "applied");
+  assert.deepEqual(f.calls.find((c) => c[0] === "markApplied"), ["markApplied", JOB]);
+  assert.ok(f.calls.find((c) => c[0] === "answer")[1].includes("beworben"));
+  const buttons = f.calls.find((c) => c[0] === "keyboard")[1].inline_keyboard.flat();
+  assert.ok(buttons.some((b) => b.callback_data === `app:${JOB}`));
+});
+
+test("the applied button never moves an application backwards", async () => {
+  for (const status of ["interview", "angebot", "absage"]) {
+    const f = fakes({ current: { status } });
+    assert.equal(await handleUpdate(update(`applied:${JOB}`), f), "applied_kept");
+    assert.ok(!f.calls.some((c) => c[0] === "markApplied"), status);
+  }
+});
+
+test("makeDb markApplied keeps stored package fields by merging only status and dates", async () => {
+  const seen = [];
+  const fetchFn = async (url, init) => {
+    seen.push({ url, prefer: init.headers.Prefer, body: JSON.parse(init.body) });
+    return { ok: true, json: async () => [] };
+  };
+  const db = makeDb({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_KEY: "k" }, fetchFn);
+  await db.markApplied(JOB);
+  assert.ok(seen[0].url.includes("applications?on_conflict=job_id"));
+  assert.equal(seen[0].prefer, "resolution=merge-duplicates,return=minimal");
+  assert.deepEqual(Object.keys(seen[0].body).sort(), ["applied_at", "job_id", "status", "updated_at"]);
+  assert.equal(seen[0].body.status, "beworben");
 });

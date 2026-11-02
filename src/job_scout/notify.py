@@ -47,7 +47,8 @@ def keyboard(job_id: str) -> dict[str, Any]:
                 {"text": "📦 Paket", "callback_data": f"pkg:{job_id}"},
                 {"text": "👀 Merken", "callback_data": f"save:{job_id}"},
                 {"text": "❌ Verwerfen", "callback_data": f"rej:{job_id}"},
-            ]
+            ],
+            [{"text": "✅ Beworben", "callback_data": f"applied:{job_id}"}],
         ]
     }
 

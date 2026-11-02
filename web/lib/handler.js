@@ -36,9 +36,12 @@ export function jobKeyboard(jobId) {
         { text: "👀 Merken", callback_data: `save:${jobId}` },
         { text: "❌ Verwerfen", callback_data: `rej:${jobId}` },
       ],
+      [appliedButton(jobId)],
     ],
   };
 }
+
+const appliedButton = (jobId) => ({ text: "✅ Beworben", callback_data: `applied:${jobId}` });
 
 const undoButton = (jobId) => ({ text: "↩️ Rückgängig", callback_data: `undo:${jobId}` });
 
@@ -55,7 +58,7 @@ export function reasonKeyboard(jobId) {
 }
 
 const done = (text, jobId) => ({
-  inline_keyboard: [[{ text, callback_data: "noop" }, undoButton(jobId)]],
+  inline_keyboard: [[{ text, callback_data: "noop" }, undoButton(jobId)], [appliedButton(jobId)]],
 });
 
 export function parseCallback(data) {
@@ -66,7 +69,7 @@ export function parseCallback(data) {
   if (parts[0] === "st" && parts[1] in STATUS && UUID.test(parts[2] ?? "")) {
     return { kind: "st", status: parts[1], jobId: parts[2] };
   }
-  if (["pkg", "save", "rej", "undo", "app", "cv", "ltr", "ini"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
+  if (["pkg", "save", "rej", "undo", "app", "cv", "ltr", "ini", "applied"].includes(parts[0]) && UUID.test(parts[1] ?? "")) {
     return { kind: parts[0], jobId: parts[1] };
   }
   if (parts[0] === "why" && (parts[1] === "skip" || parts[1] in REASONS) && UUID.test(parts[2] ?? "")) {
@@ -260,6 +263,14 @@ export function makeDb(env, fetchFn) {
       if (!res.ok) throw new Error(`storage ${path} -> ${res.status}`);
       return new Uint8Array(await res.arrayBuffer());
     },
+    async markApplied(jobId) {
+      const now = new Date().toISOString();
+      await call("applications?on_conflict=job_id", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ job_id: jobId, status: "beworben", applied_at: now, updated_at: now }),
+      });
+    },
     async markSaved(jobId) {
       await call("applications?on_conflict=job_id", {
         method: "POST",
@@ -423,6 +434,24 @@ export async function handleUpdate(update, { db, tg, gh, chatId, now = () => new
       await tg.answer(cq.id, "Gemerkt 👀");
       await tg.setKeyboard(msg.chat.id, msg.message_id, done("👀 Gemerkt", cmd.jobId));
       return "saved";
+    case "applied": {
+      const current = await db.getApplication(cmd.jobId);
+      if (current && ["interview", "angebot", "absage"].includes(current.status)) {
+        await tg.answer(cq.id, `Schon weiter: ${STATUS[current.status].label}`, true);
+        return "applied_kept";
+      }
+      await db.markApplied(cmd.jobId);
+      await tg.answer(cq.id, "Als beworben markiert ✅");
+      await tg.setKeyboard(msg.chat.id, msg.message_id, {
+        inline_keyboard: [
+          [
+            { text: "✅ Beworben", callback_data: "noop" },
+            { text: "📋 Bewerbung", callback_data: `app:${cmd.jobId}` },
+          ],
+        ],
+      });
+      return "applied";
+    }
     case "rej":
       if (!(await db.hasDecision(cmd.jobId, "reject"))) await db.addDecision(cmd.jobId, "reject");
       await tg.answer(cq.id, "Verworfen. Grund?");
