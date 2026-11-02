@@ -376,6 +376,7 @@ def create_package(
 class PackageNotifier(Protocol):
     def send(self, text: str, job_id: str | None = None) -> None: ...
     def send_document(self, path: Path, caption: str | None = None) -> None: ...
+    def send_link(self, text: str, url: str, label: str) -> None: ...
 
 
 BuildPdf = Callable[..., Path]  # (tex, photo, workdir, name="cv") -> pdf path
@@ -467,14 +468,11 @@ def run_package(
     letter_file = _named_copy(
         letter_pdf, f"Anschreiben_{file_slug(job['company_name'])}_{person}.pdf"
     )
-    label = f"{job['company_name']} – {job['title']}"
-    notifier.send_document(cv_file, caption=f"📦 CV für {label}"[:1000])
-    notifier.send_document(letter_file, caption=f"✉️ Anschreiben für {label}"[:1000])
-    notifier.send(format_gaps(result.gaps))
-
-    # Persisting comes after delivery: the user gets the package even if storage fails.
+    # Persist first: the app shows the package from storage. If storing fails, the files go to
+    # Telegram instead, so the package is never lost.
     stored_cv = f"packages/{job_id}/{cv_file.name}"
     stored_letter = f"packages/{job_id}/{letter_file.name}"
+    stored = True
     try:
         repo.upload_asset(PHOTO_BUCKET, stored_cv, cv_file.read_bytes(), "application/pdf")
         repo.upload_asset(PHOTO_BUCKET, stored_letter, letter_file.read_bytes(), "application/pdf")
@@ -487,11 +485,35 @@ def run_package(
             selection=result.selection,
         )
     except Exception as exc:
+        stored = False
         result.warnings.append(f"Speichern in Supabase fehlgeschlagen ({type(exc).__name__})")
+    label = f"{job['company_name']} – {job['title']}"
+    if settings.package_send_pdfs or not stored:
+        notifier.send_document(cv_file, caption=f"📦 CV für {label}"[:1000])
+        notifier.send_document(letter_file, caption=f"✉️ Anschreiben für {label}"[:1000])
+        notifier.send(format_gaps(result.gaps))
+    else:
+        _announce(notifier, settings, job, job_id)
     if result.warnings:
         lines = "\n".join(html.escape(w) for w in result.warnings)
         notifier.send("⚠️ <b>Bitte prüfen</b>\n" + lines)
     return True
+
+
+def app_url(settings: Settings, job_id: str) -> str:
+    return f"{settings.dashboard_url.rstrip('/')}/#/app/{job_id}"
+
+
+def _announce(
+    notifier: Any, settings: Settings, job: dict[str, Any], job_id: str, english: bool = False
+) -> None:
+    """One short message with a button into the app instead of PDFs in the chat."""
+    kind = "Paket (Englisch)" if english else "Paket"
+    text = (
+        f"📦 <b>{kind} fertig</b>\n{html.escape(job['company_name'])} – "
+        f"{html.escape(job['title'])}"
+    )
+    notifier.send_link(text, app_url(settings, job_id), "In der App öffnen")
 
 
 NO_GERMAN_PACKAGE = (
@@ -559,9 +581,22 @@ def _run_english(
     letter_file = _named_copy(
         letter_pdf, f"CoverLetter_{file_slug(job['company_name'])}_{person}.pdf"
     )
+    stored_cv = f"packages/{job_id}/{cv_file.name}"
+    stored_letter = f"packages/{job_id}/{letter_file.name}"
+    stored = True
+    try:
+        repo.upload_asset(PHOTO_BUCKET, stored_cv, cv_file.read_bytes(), "application/pdf")
+        repo.upload_asset(PHOTO_BUCKET, stored_letter, letter_file.read_bytes(), "application/pdf")
+        repo.save_english_package(job_id, cv_pdf_path=stored_cv, letter_pdf_path=stored_letter)
+    except Exception as exc:
+        stored = False
+        warnings.append(f"Storing failed ({type(exc).__name__})")
     label = f"{job['company_name']} – {job['title']}"
-    notifier.send_document(cv_file, caption=f"📦 Resume (English) für {label}"[:1000])
-    notifier.send_document(letter_file, caption=f"✉️ Cover letter (English) für {label}"[:1000])
+    if settings.package_send_pdfs or not stored:
+        notifier.send_document(cv_file, caption=f"📦 Resume (English) für {label}"[:1000])
+        notifier.send_document(letter_file, caption=f"✉️ Cover letter (English) für {label}"[:1000])
+    else:
+        _announce(notifier, settings, job, job_id, english=True)
     if warnings:
         notifier.send("⚠️ " + "; ".join(html.escape(w) for w in warnings))
     return True

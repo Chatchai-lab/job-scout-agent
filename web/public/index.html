@@ -65,6 +65,16 @@ select.sort { width: 100%; font-size: 15px; padding: 10px 12px; border-radius: 1
 .error { color: var(--bad); }
 .badge.closed { background: var(--bad); color: #fff; }
 .card.is-closed { border-color: var(--bad); }
+.back { border: 0; background: none; color: var(--accent); font-size: 16px; padding: 4px 0 10px; }
+.btn { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); font-size: 16px; padding: 13px 14px; border-radius: 12px; margin: 8px 0; text-decoration: none; }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 650; }
+.btn[disabled] { opacity: .5; }
+.statusrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.letter { white-space: pre-wrap; font-size: 15px; line-height: 1.5; }
+.gap { margin: 10px 0; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); background: var(--text);
+  color: var(--bg); padding: 12px 14px; border-radius: 12px; text-align: center; z-index: 10; }
 .pill-new { color: var(--good); font-weight: 700; font-size: 12px; }
 nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom); }
@@ -108,7 +118,7 @@ const store = {
 };
 const ORDER = ["angebot", "interview", "beworben", "paket", "gemerkt", "absage"];
 const TITLES = { apps: "Bewerbungen", jobs: "Stellen", status: "Status" };
-const state = { data: null, tab: "apps", filter: "all", query: "", appFilter: "all", appSort: "status" };
+const state = { data: null, detail: null, tab: "apps", filter: "all", query: "", appFilter: "all", appSort: "status" };
 const $ = (id) => document.getElementById(id);
 
 function h(tag, attrs, ...kids) {
@@ -161,7 +171,6 @@ function jobCard(j) {
 }
 
 function appCard(a) {
-  const link = safeUrl(a.url);
   const body = [
     h("div", { class: "company" }, a.company),
     h("div", { class: "title" }, a.title),
@@ -169,7 +178,8 @@ function appCard(a) {
       a.closed ? [h("span", { class: "badge closed" }, "Stelle geschlossen"), " "] : null,
       [a.appliedAt ? `Beworben ${date(a.appliedAt)}` : `Aktualisiert ${date(a.updatedAt)}`, a.hasPackage ? "📦 Paket" : ""].filter(Boolean).join(" · ")),
   ];
-  const card = h("div", { class: "card" + (a.closed ? " is-closed" : "") }, link ? h("a", { href: link, target: "_blank", rel: "noopener noreferrer" }, body) : body);
+  const card = h("div", { class: "card" + (a.closed ? " is-closed" : ""), role: "button", tabindex: "0" }, body);
+  card.addEventListener("click", () => { location.hash = `#/app/${a.id}`; });
   return card;
 }
 
@@ -261,7 +271,123 @@ function renderStatus() {
     h("p", { class: "sub" }, `Stand: ${new Date(state.data.generatedAt).toLocaleString("de-DE")}`));
 }
 
-function render() {
+const STATUS_ORDER = ["beworben", "interview", "absage", "angebot"];
+
+function toast(text) {
+  const el = h("div", { class: "toast" }, text);
+  document.body.append(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { "x-dashboard-password": store.get("pw") || "", "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (res.status === 401) { store.del("pw"); showLogin("Passwort falsch."); throw new Error("unauthorized"); }
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
+}
+
+async function openFile(id, kind) {
+  // The window is opened right at the tap, so iOS does not block it after the request.
+  const win = window.open("", "_blank");
+  try {
+    const { url } = await api(`/api/file?id=${id}&kind=${kind}`);
+    if (win) win.location.href = url; else location.href = url;
+  } catch {
+    if (win) win.close();
+    toast("Die Datei konnte nicht geöffnet werden.");
+  }
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast("Kopiert ✅"); }
+  catch { toast("Kopieren nicht möglich. Text markieren und kopieren."); }
+}
+
+async function changeStatus(id, status) {
+  try {
+    await api("/api/status", { method: "POST", body: JSON.stringify({ id, status }) });
+    toast("Status gespeichert ✅");
+    await load();
+  } catch { toast("Der Status konnte nicht gespeichert werden."); }
+}
+
+function fileButton(id, kind, label, files) {
+  if (!files[kind]) return null;
+  const b = h("button", { class: "btn", type: "button" }, label);
+  b.addEventListener("click", () => openFile(id, kind));
+  return b;
+}
+
+async function renderDetail(id) {
+  const view = h("div", {});
+  const back = h("button", { class: "back", type: "button" }, "‹ Zurück");
+  back.addEventListener("click", () => { location.hash = ""; });
+  view.append(back);
+  let d;
+  try { d = await api(`/api/application?id=${id}`); }
+  catch { view.append(h("p", { class: "error" }, "Diese Bewerbung konnte nicht geladen werden.")); return view; }
+  const labels = state.data.statusLabels;
+  view.append(h("div", { class: "card" + (d.closed ? " is-closed" : "") },
+    h("div", { class: "company" }, d.company), h("div", { class: "title" }, d.title),
+    h("div", { class: "meta" },
+      d.closed ? [h("span", { class: "badge closed" }, "Stelle geschlossen"), " "] : null,
+      `${labels[d.status].icon} ${labels[d.status].label}`,
+      d.appliedAt ? ` · Beworben ${date(d.appliedAt)}` : "")));
+
+  view.append(h("div", { class: "group" }, "Status ändern"));
+  const reset = d.files.cv ? "paket" : "gemerkt";
+  view.append(h("div", { class: "statusrow" }, [...STATUS_ORDER, reset].map((st) => {
+    const b = h("button", { class: "chip", type: "button", "aria-pressed": String(d.status === st) },
+      st === reset ? "↩️ Zurücksetzen" : `${labels[st].icon} ${labels[st].label}`);
+    b.addEventListener("click", () => { if (d.status !== st) changeStatus(d.id, st); });
+    return b;
+  })));
+
+  const files = [
+    fileButton(d.id, "cv", "📄 Lebenslauf (PDF)", d.files), fileButton(d.id, "letter", "✉️ Anschreiben (PDF)", d.files),
+    fileButton(d.id, "cv_en", "🇬🇧 Resume (PDF)", d.files), fileButton(d.id, "letter_en", "🇬🇧 Cover letter (PDF)", d.files),
+  ].filter(Boolean);
+  view.append(h("div", { class: "group" }, "Unterlagen"));
+  view.append(...(files.length ? files : [h("p", { class: "empty" }, "Noch kein Paket gebaut.")]));
+  const link = safeUrl(d.url);
+  if (link) view.append(h("a", { class: "btn primary", href: link, target: "_blank", rel: "noopener noreferrer" }, "🔗 Anzeige öffnen"));
+
+  if (d.coverLetter) {
+    view.append(h("div", { class: "group" }, "Anschreiben (Text)"));
+    const copy = h("button", { class: "btn", type: "button" }, "📋 Text kopieren");
+    copy.addEventListener("click", () => copyText(d.coverLetter));
+    view.append(h("div", { class: "card letter" }, d.coverLetter), copy);
+  }
+  if (d.gaps.length) {
+    view.append(h("div", { class: "group" }, "Gap-Analyse"));
+    const icon = { "erfüllt": "✅", teilweise: "🟡", fehlt: "❌" };
+    view.append(h("div", { class: "card" }, d.gaps.map((g) =>
+      h("div", { class: "gap" }, h("div", { class: "company" }, `${icon[g.status] ?? "•"} ${g.requirement}`), h("div", { class: "meta" }, g.note)))));
+  }
+  return view;
+}
+
+function routeFromHash() {
+  const m = /^#\/app\/([0-9a-f-]{36})$/i.exec(location.hash);
+  state.detail = m ? m[1] : null;
+}
+
+async function render() {
+  routeFromHash();
+  if (state.detail) {
+    $("head-title").textContent = "Bewerbung";
+    $("head-sub").textContent = "";
+    document.querySelectorAll("nav button").forEach((b) => b.removeAttribute("aria-current"));
+    const id = state.detail;
+    const content = await renderDetail(id);
+    if (state.detail === id) $("view").replaceChildren(content);
+    window.scrollTo(0, 0);
+    return;
+  }
   $("head-title").textContent = TITLES[state.tab];
   const d = state.data;
   $("head-sub").textContent = state.tab === "jobs" ? `${d.jobs.length} passende Stellen` : state.tab === "apps" ? `${d.applications.length} Einträge` : "";
@@ -271,7 +397,12 @@ function render() {
   $("view").replaceChildren(state.tab === "apps" ? renderApps() : state.tab === "jobs" ? renderJobs() : renderStatus());
 }
 
-document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => { state.tab = b.dataset.tab; if (state.data) { render(); window.scrollTo(0, 0); } }));
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
+  state.tab = b.dataset.tab;
+  if (location.hash) { location.hash = ""; return; }
+  if (state.data) { render(); window.scrollTo(0, 0); }
+}));
+window.addEventListener("hashchange", () => { if (state.data) render(); });
 $("refresh").addEventListener("click", load);
 $("login-form").addEventListener("submit", (e) => { e.preventDefault(); store.set("pw", $("pw").value); $("pw").value = ""; load(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && store.get("pw")) load(); });

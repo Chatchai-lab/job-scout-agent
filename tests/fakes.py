@@ -94,6 +94,11 @@ class FakeRepo:
     def package_state(self, job_id):
         return self.packages.get(job_id)
 
+    def save_english_package(self, job_id, *, cv_pdf_path, letter_pdf_path):
+        self.packages.setdefault(job_id, {}).update(
+            en_cv_pdf_path=cv_pdf_path, en_letter_pdf_path=letter_pdf_path
+        )
+
     def mark_kind(self, job_ids, kind):
         for job in self.jobs:
             if job["id"] in job_ids:
@@ -147,6 +152,10 @@ class FakeNotifier:
         self.sent: list[tuple[str, str | None]] = []
         self.reminders: list[tuple[str, str]] = []
         self.docs: list[tuple[str, str | None]] = []
+        self.links: list[tuple[str, str, str]] = []
+
+    def send_link(self, text, url, label):
+        self.links.append((text, url, label))
 
     def send_document(self, path, caption=None):
         self.docs.append((path.name, caption))

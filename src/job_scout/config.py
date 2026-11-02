@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     include_working_student: bool = True  # Werkstudent near Darmstadt or remote
     eur_per_usd: float = 0.92
     profile_yaml: str = ""
+    dashboard_url: str = "https://job-scout-web-smoky.vercel.app"
+    package_send_pdfs: bool = False  # True: also send the PDFs to Telegram (default: app only)
 
 
 @lru_cache

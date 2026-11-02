@@ -4,6 +4,16 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import { LIMITS, NOT_FULL_TIME, STATUS } from "./applications.js";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BUCKET = "cv-assets";
+export const FILE_COLUMNS = {
+  cv: "cv_pdf_path",
+  letter: "letter_pdf_path",
+  cv_en: "en_cv_pdf_path",
+  letter_en: "en_letter_pdf_path",
+};
+export const isUuid = (value) => UUID.test(String(value ?? ""));
+
 // Mirrors config.py (working_student_fit_threshold).
 export const WORKING_STUDENT_FIT = 3;
 const KINDS = ["posting", "working_student"];
@@ -160,6 +170,80 @@ export function makeDashboardDb(env, fetchFn) {
         counts: { companies, openJobs },
         paused: paused[0]?.value === "true",
       };
+    },
+  };
+}
+
+const DETAIL_COLUMNS =
+  "job_id,status,applied_at,updated_at,cover_letter,gaps,cv_pdf_path,letter_pdf_path," +
+  "en_cv_pdf_path,en_letter_pdf_path,jobs(company_name,title,url,closed_at)";
+
+export function applicationDetail(row) {
+  const job = row.jobs ?? {};
+  return {
+    id: row.job_id,
+    status: row.status,
+    company: job.company_name ?? "",
+    title: job.title ?? "",
+    url: job.url ?? "",
+    closed: Boolean(job.closed_at),
+    appliedAt: row.applied_at,
+    updatedAt: row.updated_at,
+    coverLetter: row.cover_letter ?? "",
+    gaps: Array.isArray(row.gaps) ? row.gaps : [],
+    files: Object.fromEntries(Object.entries(FILE_COLUMNS).map(([kind, col]) => [kind, Boolean(row[col])])),
+  };
+}
+
+// Password check, method check and slow answer to wrong guesses, shared by all /api routes.
+export async function guard(req, res, method, env = process.env) {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.method !== method) {
+    res.status(405).end();
+    return false;
+  }
+  const missing = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "DASHBOARD_PASSWORD"].filter((k) => !env[k]);
+  if (missing.length) {
+    console.error("missing env:", missing.join(", "));
+    res.status(500).json({ error: "not configured" });
+    return false;
+  }
+  if (!authorized(req.headers["x-dashboard-password"], env.DASHBOARD_PASSWORD)) {
+    await new Promise((resolve) => setTimeout(resolve, 500)); // slows down guessing
+    res.status(401).json({ error: "unauthorized" });
+    return false;
+  }
+  return true;
+}
+
+export function makeDetailDb(env, fetchFn) {
+  const headers = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  };
+  return {
+    async getDetail(jobId) {
+      const res = await fetchFn(
+        `${env.SUPABASE_URL}/rest/v1/applications?job_id=eq.${jobId}&select=${DETAIL_COLUMNS}&limit=1`,
+        { method: "GET", headers },
+      );
+      if (!res.ok) throw new Error(`supabase applications ${res.status}`);
+      const rows = await res.json();
+      return rows[0] ?? null;
+    },
+    // A short-lived link to one stored PDF; the file itself stays private.
+    async signedUrl(path) {
+      const res = await fetchFn(
+        `${env.SUPABASE_URL}/storage/v1/object/sign/${BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`,
+        {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ expiresIn: 300 }),
+        },
+      );
+      if (!res.ok) throw new Error(`supabase sign ${res.status}`);
+      const { signedURL } = await res.json();
+      return `${env.SUPABASE_URL}/storage/v1${signedURL}`;
     },
   };
 }

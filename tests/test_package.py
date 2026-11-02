@@ -190,7 +190,7 @@ def _fake_build(tex, photo, workdir, name="cv"):
 def test_run_package_builds_stores_logs_and_delivers(tmp_path: Path):
     repo, notifier = _repo_with_job(), FakeNotifier()
     client = ScriptedClient([_draft()], [[]])
-    assert run_package(repo, Settings(), client, notifier, "job-1",
+    assert run_package(repo, Settings(package_send_pdfs=True), client, notifier, "job-1",
                        build_pdf=_fake_build, workdir=tmp_path, today=date(2026, 10, 21)) is True
     cv_key = "packages/job-1/Lebenslauf_Max_Mustermann.pdf"
     letter_key = "packages/job-1/Anschreiben_Firma_Max_Mustermann.pdf"
@@ -418,13 +418,18 @@ def test_english_package_translates_the_stored_german_one(tmp_path: Path):
                 build_pdf=_fake_build, workdir=tmp_path)
     before = dict(repo.packages["job-1"])
     notifier, client = FakeNotifier(), TranslatingClient()
-    assert run_package(repo, Settings(), client, notifier, "job-1", build_pdf=_english_build,
-                       workdir=tmp_path / "en", lang="en") is True
+    assert run_package(repo, Settings(package_send_pdfs=True), client, notifier, "job-1",
+                       build_pdf=_english_build, workdir=tmp_path / "en", lang="en") is True
     assert client.calls == 1 and "letter" in client.keys and "headline" in client.keys
     assert [name for name, _ in notifier.docs] == [
         "Resume_Max_Mustermann.pdf", "CoverLetter_Firma_Max_Mustermann.pdf",
     ]
-    assert repo.packages["job-1"] == before  # the German master is untouched
+    stored = repo.packages["job-1"]
+    assert {k: v for k, v in stored.items() if not k.startswith("en_")} == {
+        k: v for k, v in before.items() if not k.startswith("en_")
+    }  # the German master is untouched
+    assert stored["en_cv_pdf_path"] == "packages/job-1/Resume_Max_Mustermann.pdf"
+    assert stored["en_letter_pdf_path"] == "packages/job-1/CoverLetter_Firma_Max_Mustermann.pdf"
     assert [u["purpose"] for u in repo.usage][-1] == "package"
 
 
@@ -446,3 +451,38 @@ def test_translation_that_adds_numbers_or_technologies_is_repeated_then_rejected
     ok = TranslatingClient(lambda key, text: "Student with Python.")
     english, _ = translate_units(ok, "m", {"summary": "Student mit Python."})
     assert english == {"summary": "Student with Python."}
+
+
+def test_by_default_the_chat_gets_one_short_message_with_an_app_link(tmp_path: Path):
+    repo, notifier = _repo_with_job(), FakeNotifier()
+    run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), notifier, "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    assert notifier.docs == [] and notifier.sent == []
+    [(text, url, label)] = notifier.links
+    assert "Paket fertig" in text and "Firma" in text
+    assert url == "https://job-scout-web-smoky.vercel.app/#/app/job-1"
+    assert label == "In der App öffnen"
+    assert repo.packages["job-1"]["cv_pdf_path"].endswith("Lebenslauf_Max_Mustermann.pdf")
+
+
+def test_failed_storage_falls_back_to_the_files_in_the_chat(tmp_path: Path):
+    repo, notifier = _repo_with_job(), FakeNotifier()
+
+    def broken_upload(*_args):
+        raise RuntimeError("storage down")
+
+    repo.upload_asset = broken_upload
+    run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), notifier, "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    assert len(notifier.docs) == 2 and notifier.links == []
+
+
+def test_english_package_is_announced_with_a_link_and_stores_its_paths(tmp_path: Path):
+    repo = _repo_with_job()
+    run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), FakeNotifier(), "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    notifier = FakeNotifier()
+    run_package(repo, Settings(), TranslatingClient(), notifier, "job-1",
+                build_pdf=_english_build, workdir=tmp_path / "en", lang="en")
+    assert notifier.docs == [] and "Englisch" in notifier.links[0][0]
+    assert repo.packages["job-1"]["en_cv_pdf_path"].endswith("Resume_Max_Mustermann.pdf")

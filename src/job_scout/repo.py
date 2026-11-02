@@ -44,6 +44,9 @@ class Repo(Protocol):
     def package_state(self, job_id: str) -> dict[str, Any] | None:
         """Stored German package of a job (cover_letter, selection), or None."""
         ...
+    def save_english_package(self, job_id: str, *, cv_pdf_path: str, letter_pdf_path: str) -> None:
+        """Store the paths of the English PDFs next to the German package."""
+        ...
     def scored_job(self, job_id: str) -> dict[str, Any] | None:
         """One score row joined with its job (same shape as unnotified), or None."""
         ...
@@ -215,9 +218,19 @@ class SupabaseRepo:
             "cover_letter": cover_letter,
             "gaps": gaps,
             "selection": selection,
+            "en_cv_pdf_path": None,  # a new German package makes an older translation stale
+            "en_letter_pdf_path": None,
             "updated_at": _now(),
         }
         self._run(self.db.table("applications").upsert(row, on_conflict="job_id"))
+
+    def save_english_package(self, job_id: str, *, cv_pdf_path: str, letter_pdf_path: str) -> None:
+        fields = {
+            "en_cv_pdf_path": cv_pdf_path,
+            "en_letter_pdf_path": letter_pdf_path,
+            "updated_at": _now(),
+        }
+        self._run(self.db.table("applications").update(fields).eq("job_id", job_id))
 
     def package_state(self, job_id: str) -> dict[str, Any] | None:
         rows = self._run(

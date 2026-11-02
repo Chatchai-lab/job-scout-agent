@@ -73,6 +73,9 @@ class TelegramNotifier:
     def send_reminder(self, text: str, job_id: str) -> None:
         self._post(text, reminder_keyboard(job_id))
 
+    def send_link(self, text: str, url: str, label: str) -> None:
+        self._post(text, {"inline_keyboard": [[{"text": label, "url": url}]]})
+
     def _post(self, text: str, markup: dict[str, Any] | None) -> None:
         payload: dict[str, Any] = {
             "chat_id": self._chat_id,
