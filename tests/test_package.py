@@ -486,3 +486,20 @@ def test_english_package_is_announced_with_a_link_and_stores_its_paths(tmp_path:
                 build_pdf=_english_build, workdir=tmp_path / "en", lang="en")
     assert notifier.docs == [] and "Englisch" in notifier.links[0][0]
     assert repo.packages["job-1"]["en_cv_pdf_path"].endswith("Resume_Max_Mustermann.pdf")
+
+
+def test_calls_are_booked_even_when_the_run_fails_half_way(tmp_path: Path):
+    repo = _repo_with_job()
+    client = ScriptedClient([_draft()], [])  # no fact-check answer queued: the second call fails
+    with pytest.raises(IndexError):
+        run_package(repo, Settings(), client, FakeNotifier(), "job-1",
+                    build_pdf=_fake_build, workdir=tmp_path)
+    assert [u["purpose"] for u in repo.usage] == ["package"]  # the draft was billed and booked
+    assert repo.usage[0]["cost_usd"] > 0 and repo.usage[0]["model"] == Settings().model_package
+
+
+def test_each_call_is_booked_once_in_a_normal_run(tmp_path: Path):
+    repo = _repo_with_job()
+    run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), FakeNotifier(), "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    assert len(repo.usage) == 2  # draft + fact check, not doubled

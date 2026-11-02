@@ -73,7 +73,24 @@ export function applicationEntry(app) {
   };
 }
 
-export function buildDashboard({ scores, apps, initiatives, cost, counts, paused, now = new Date() }) {
+// Remaining credit: what the user entered from the console minus what was spent since then.
+export function creditFrom(state, totalUsd) {
+  const start = Number(state?.api_credit_usd);
+  if (!Number.isFinite(start) || state?.api_credit_usd == null) return null;
+  const base = Number(state.api_credit_base_cost ?? 0);
+  const remainingUsd = start - Math.max(0, totalUsd - base);
+  return {
+    startUsd: start,
+    remainingUsd,
+    remainingEur: remainingUsd * LIMITS.eurPerUsd,
+    percent: start > 0 ? Math.max(0, Math.round((remainingUsd / start) * 100)) : 0,
+    setAt: state.api_credit_set_at ?? null,
+  };
+}
+
+export function buildDashboard({
+  scores, apps, initiatives, cost, counts, paused, totalCost = 0, creditState = {}, now = new Date(),
+}) {
   const jobs = scores
     .filter(qualifies)
     .map(jobEntry)
@@ -103,6 +120,7 @@ export function buildDashboard({ scores, apps, initiatives, cost, counts, paused
       statuses,
       paused: Boolean(paused),
     },
+    credit: creditFrom(creditState, Number(totalCost ?? 0)),
     statusLabels: STATUS,
     applications,
     jobs,
@@ -137,7 +155,7 @@ export function makeDashboardDb(env, fetchFn) {
   return {
     async load() {
       const month = `${new Date().toISOString().slice(0, 7)}-01`;
-      const [scored, manual, apps, initiatives, cost, companies, openJobs, paused] = await Promise.all([
+      const [scored, manual, apps, initiatives, cost, companies, openJobs, paused, total, credit] = await Promise.all([
         rows(
           `scores?select=${JOB_COLUMNS}` +
             `&reach=gte.${LIMITS.reach}&fit=gte.${WORKING_STUDENT_FIT}&ring=neq.raus` +
@@ -159,6 +177,8 @@ export function makeDashboardDb(env, fetchFn) {
         count("companies?active=eq.true&select=id"),
         count("jobs?closed_at=is.null&kind=eq.posting&select=id"),
         rows("app_state?select=value&key=eq.notifications_paused"),
+        rows("total_api_cost?select=cost_usd"),
+        rows("app_state?select=key,value&key=in.(api_credit_usd,api_credit_base_cost,api_credit_set_at)"),
       ]);
       const seen = new Set(scored.map((r) => r.jobs.id));
       const scores = [...scored, ...manual.filter((r) => !seen.has(r.jobs.id))];
@@ -169,6 +189,8 @@ export function makeDashboardDb(env, fetchFn) {
         cost: cost[0]?.cost_usd ?? 0,
         counts: { companies, openJobs },
         paused: paused[0]?.value === "true",
+        totalCost: total[0]?.cost_usd ?? 0,
+        creditState: Object.fromEntries(credit.map((r) => [r.key, r.value])),
       };
     },
   };
@@ -265,5 +287,74 @@ export async function startPackage({ db, gh, id, language, now = () => new Date(
   }
   await gh.dispatchPackage(id, language);
   await db.addDecision(id, "package");
+  return { code: 200, body: { ok: true } };
+}
+
+// Small write helpers on the private tables the app needs (settings and the total spend).
+export function makeAppDb(env, fetchFn) {
+  const headers = {
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    "Content-Type": "application/json",
+  };
+  return {
+    async totalCost() {
+      const res = await fetchFn(`${env.SUPABASE_URL}/rest/v1/total_api_cost?select=cost_usd`, { method: "GET", headers });
+      if (!res.ok) throw new Error(`supabase total ${res.status}`);
+      return Number((await res.json())[0]?.cost_usd ?? 0);
+    },
+    async setState(entries) {
+      const rows = Object.entries(entries).map(([key, value]) => ({ key, value: String(value), updated_at: new Date().toISOString() }));
+      const res = await fetchFn(`${env.SUPABASE_URL}/rest/v1/app_state?on_conflict=key`, {
+        method: "POST",
+        headers: { ...headers, Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(rows),
+      });
+      if (!res.ok) throw new Error(`supabase app_state ${res.status}`);
+    },
+  };
+}
+
+// "Guthaben jetzt: 18,40 $ (aus der Konsole)": the app counts down from here.
+export async function setCredit({ db, amount, currency }) {
+  const value = Number(String(amount ?? "").replace(",", "."));
+  if (!Number.isFinite(value) || value < 0 || value > 100000 || !["USD", "EUR"].includes(currency)) {
+    return { code: 400, body: { error: "Bitte einen Betrag und die Währung angeben." } };
+  }
+  const usd = currency === "EUR" ? value / LIMITS.eurPerUsd : value;
+  await db.setState({
+    api_credit_usd: usd.toFixed(4),
+    api_credit_base_cost: (await db.totalCost()).toFixed(6),
+    api_credit_set_at: new Date().toISOString(),
+  });
+  return { code: 200, body: { ok: true } };
+}
+
+const HTTP_URL = /^https?:\/\/\S+$/i;
+
+// A job found by hand: a link, or company + title + pasted ad text. Same rules as the bot.
+export async function startImport({ db, gh, body }) {
+  if (!gh.configured) return { code: 503, body: { error: "Der Import ist noch nicht eingerichtet." } };
+  const { url, company, title, description } = body ?? {};
+  let entry;
+  if (description) {
+    const text = String(description).trim();
+    if (text.length < 80 || !String(company ?? "").trim() || !String(title ?? "").trim()) {
+      return { code: 400, body: { error: "Firma, Titel und mindestens ein paar Sätze Text angeben." } };
+    }
+    const first = /https?:\/\/[^\s<>"]+/i.exec(text)?.[0] ?? "";
+    entry = {
+      company: String(company).trim().slice(0, 80),
+      title: String(title).trim().slice(0, 200),
+      description: text.slice(0, 12000),
+      url: String(url ?? first).trim().slice(0, 2000),
+    };
+  } else {
+    const link = String(url ?? "").trim();
+    if (!HTTP_URL.test(link)) return { code: 400, body: { error: "Das ist kein gültiger Link (http oder https)." } };
+    entry = { url: link.slice(0, 2000) };
+  }
+  const id = await db.createImport(entry);
+  await gh.dispatchImport(id);
   return { code: 200, body: { ok: true } };
 }

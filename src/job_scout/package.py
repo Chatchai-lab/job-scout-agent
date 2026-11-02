@@ -26,6 +26,7 @@ from job_scout.letterrender import render_letter
 from job_scout.pricing import Usage, cost_usd
 from job_scout.toolcall import call_tool
 from job_scout.translate import apply_units, context_units, translate_units
+from job_scout.usagelog import UsageRecorder, log_calls
 
 MAX_DESCRIPTION_CHARS = 6000
 PHOTO_BUCKET = "cv-assets"
@@ -421,7 +422,31 @@ def run_package(
     today: date | None = None,
     lang: str = "de",
 ) -> bool:
-    """Build and deliver the package for one job. Returns False if the job is unknown."""
+    """Build and deliver the package for one job. Returns False if the job is unknown.
+
+    Every billed model call is booked, also when the run fails half-way."""
+    recorder = UsageRecorder(client)
+    try:
+        return _run_package(
+            repo, settings, recorder, notifier, job_id,
+            build_pdf=build_pdf, workdir=workdir, today=today, lang=lang,
+        )
+    finally:
+        log_calls(repo, "package", recorder.calls)
+
+
+def _run_package(
+    repo: Any,
+    settings: Settings,
+    client: Any,
+    notifier: PackageNotifier,
+    job_id: str,
+    *,
+    build_pdf: BuildPdf,
+    workdir: Path,
+    today: date | None,
+    lang: str,
+) -> bool:
     job = repo.package_job(job_id)
     if job is None:
         notifier.send("📦 Paket: Diese Stelle ist nicht bekannt.")
@@ -437,19 +462,6 @@ def run_package(
         )
 
     result = create_package(client, settings, profile_text, job)
-    # Log the spend right away: a later failure must not hide what the API calls cost.
-    for model, u in result.usage:
-        repo.log_usage(
-            {
-                "purpose": "package",
-                "model": model,
-                "input_tokens": u.input_tokens,
-                "cache_read_tokens": u.cache_read_tokens,
-                "output_tokens": u.output_tokens,
-                "cost_usd": round(cost_usd(model, u), 6),
-            }
-        )
-
     photo: bytes | None = None
     photo_name = profile.get("person", {}).get("photo")
     if photo_name:
@@ -545,18 +557,7 @@ def _run_english(
         return True
     units = context_units(build_context(profile, selection, False, "de"))
     units["letter"] = letter
-    english, used = translate_units(client, settings.model_package, units)
-    for model, u in used:
-        repo.log_usage(
-            {
-                "purpose": "package",
-                "model": model,
-                "input_tokens": u.input_tokens,
-                "cache_read_tokens": u.cache_read_tokens,
-                "output_tokens": u.output_tokens,
-                "cost_usd": round(cost_usd(model, u), 6),
-            }
-        )
+    english, _ = translate_units(client, settings.model_package, units)
     letter_en = english.pop("letter")
 
     photo: bytes | None = None

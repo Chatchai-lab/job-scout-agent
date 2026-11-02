@@ -4,7 +4,9 @@ import { test } from "node:test";
 import file from "../api/file.js";
 import application from "../api/application.js";
 import status from "../api/status.js";
-import { applicationDetail, guard, isUuid, makeDetailDb, startPackage } from "../lib/dashboard.js";
+import {
+  applicationDetail, creditFrom, guard, isUuid, makeDetailDb, setCredit, startImport, startPackage,
+} from "../lib/dashboard.js";
 import { makeGithub } from "../lib/handler.js";
 
 const ID = "123e4567-e89b-42d3-a456-426614174000";
@@ -189,4 +191,42 @@ test("the package workflow gets the language as input", async () => {
   assert.deepEqual(body.inputs, { job_id: ID, language: "en" });
   await gh.dispatchPackage(ID);
   assert.equal(body.inputs.language, "de");
+});
+
+test("remaining credit counts down from the value entered, not from zero", () => {
+  assert.equal(creditFrom({}, 5), null);
+  const c = creditFrom({ api_credit_usd: "20", api_credit_base_cost: "3", api_credit_set_at: "2026-11-02T10:00:00Z" }, 5.5);
+  assert.equal(c.startUsd, 20);
+  assert.equal(c.remainingUsd, 17.5); // 20 - (5.5 - 3)
+  assert.equal(c.percent, 88);
+  assert.ok(Math.abs(c.remainingEur - 17.5 * 0.92) < 1e-9);
+  assert.equal(creditFrom({ api_credit_usd: "1", api_credit_base_cost: "0" }, 9).percent, 0); // never negative percent
+});
+
+test("setCredit stores the amount in USD with the spend so far", async () => {
+  const stored = [];
+  const db = { totalCost: async () => 2.5, setState: async (e) => stored.push(e) };
+  assert.equal((await setCredit({ db, amount: "18,40", currency: "USD" })).code, 200);
+  assert.equal(stored[0].api_credit_usd, "18.4000");
+  assert.equal(stored[0].api_credit_base_cost, "2.500000");
+  await setCredit({ db, amount: "9.2", currency: "EUR" });
+  assert.equal(stored[1].api_credit_usd, "10.0000"); // 9.2 EUR / 0.92
+  for (const bad of [{ amount: "abc", currency: "USD" }, { amount: "-1", currency: "USD" }, { amount: "5", currency: "GBP" }]) {
+    assert.equal((await setCredit({ db, ...bad })).code, 400);
+  }
+});
+
+test("startImport accepts a link or pasted text and rejects the rest", async () => {
+  const calls = [];
+  const f = { db: { createImport: async (e) => { calls.push(["create", e]); return ID; } }, gh: { configured: true, dispatchImport: async (id) => calls.push(["dispatch", id]) } };
+  assert.equal((await startImport({ ...f, body: { url: " https://firma.de/job/1 " } })).code, 200);
+  assert.deepEqual(calls[0], ["create", { url: "https://firma.de/job/1" }]);
+  assert.deepEqual(calls[1], ["dispatch", ID]);
+  const text = "Aufgaben: Entwicklung von KI-Anwendungen mit Python und Cloud. ".repeat(3);
+  assert.equal((await startImport({ ...f, body: { company: "Acme", title: "Dev", description: text } })).code, 200);
+  assert.equal(calls[2][1].company, "Acme");
+  for (const body of [{}, { url: "ftp://x" }, { url: "javascript:alert(1)" }, { company: "A", title: "B", description: "zu kurz" }, { description: text }]) {
+    assert.equal((await startImport({ ...f, body })).code, 400, JSON.stringify(body));
+  }
+  assert.equal((await startImport({ db: f.db, gh: { configured: false }, body: { url: "https://a.de" } })).code, 503);
 });

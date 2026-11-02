@@ -94,7 +94,9 @@ test("db loader asks Supabase for the right tables with the service key", async 
   assert.deepEqual(data.counts, { companies: 42, openJobs: 42 });
   assert.ok(calls.every((c) => c.key === "k"));
   const tables = calls.map((c) => c.url.split("/rest/v1/")[1].split("?")[0]).sort();
-  assert.deepEqual(tables, ["app_state", "applications", "companies", "jobs", "jobs", "monthly_cost", "scores", "scores"]);
+  assert.deepEqual(tables, [
+    "app_state", "app_state", "applications", "companies", "jobs", "jobs", "monthly_cost", "scores", "scores", "total_api_cost",
+  ]);
 });
 
 test("db loader fails loudly when Supabase answers with an error", async () => {

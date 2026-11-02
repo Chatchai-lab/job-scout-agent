@@ -47,7 +47,7 @@ main { padding: 0 16px 16px; max-width: 640px; margin: 0 auto; }
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: none; border: 0; background: var(--chip); color: var(--text); padding: 8px 14px; border-radius: 999px; font-size: 14px; }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); font-weight: 650; }
-input[type=search], input[type=password] { width: 100%; font-size: 16px; padding: 12px 14px; border-radius: 12px;
+input[type=search], input[type=password], input[type=text], input[type=url], input[type=number], textarea { width: 100%; font-size: 16px; padding: 12px 14px; border-radius: 12px;
   border: 1px solid var(--line); background: var(--card); color: var(--text); }
 button.primary { width: 100%; margin-top: 12px; font-size: 17px; font-weight: 650; padding: 13px; border: 0;
   border-radius: 12px; background: var(--accent); color: var(--accent-text); }
@@ -65,6 +65,9 @@ select.sort { width: 100%; font-size: 15px; padding: 10px 12px; border-radius: 1
 .error { color: var(--bad); }
 .badge.closed { background: var(--bad); color: #fff; }
 .card.is-closed { border-color: var(--bad); }
+textarea { min-height: 120px; resize: vertical; font-family: inherit; }
+.field { margin: 8px 0; }
+details > summary { cursor: pointer; color: var(--accent); padding: 8px 0; }
 .back { border: 0; background: none; color: var(--accent); font-size: 16px; padding: 4px 0 10px; }
 .btn { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--card);
   color: var(--text); font-size: 16px; padding: 13px 14px; border-radius: 12px; margin: 8px 0; text-decoration: none; }
@@ -229,9 +232,36 @@ function renderApps() {
   return view;
 }
 
+function addJobCard() {
+  const url = h("input", { type: "url", placeholder: "Link zur Stelle einfügen", "aria-label": "Link zur Stelle", autocapitalize: "off", inputmode: "url" });
+  const go = h("button", { class: "btn primary", type: "button" }, "Aufnehmen");
+  const company = h("input", { type: "text", placeholder: "Firma", "aria-label": "Firma" });
+  const title = h("input", { type: "text", placeholder: "Jobtitel", "aria-label": "Jobtitel" });
+  const text = h("textarea", { placeholder: "Anzeigentext hier einfügen", "aria-label": "Anzeigentext" });
+  const goText = h("button", { class: "btn", type: "button" }, "Mit Text aufnehmen");
+  async function send(body, clear) {
+    try {
+      await api("/api/import", { method: "POST", body: JSON.stringify(body) });
+      toast("Wird gelesen. Die Stelle erscheint in etwa einer Minute hier.");
+      clear.forEach((el) => { el.value = ""; });
+      setTimeout(() => { if (store.get("pw")) load(); }, 70000);
+    } catch (err) {
+      toast(err.message.length > 90 ? "Das hat nicht geklappt." : err.message);
+    }
+  }
+  go.addEventListener("click", () => { if (url.value.trim()) send({ url: url.value.trim() }, [url]); else toast("Bitte zuerst einen Link einfügen."); });
+  goText.addEventListener("click", () => send({ company: company.value, title: title.value, description: text.value, url: url.value.trim() || undefined }, [company, title, text, url]));
+  return h("div", { class: "card" },
+    h("div", { class: "company" }, "➕ Stelle hinzufügen"),
+    h("div", { class: "field" }, url), go,
+    h("details", {}, h("summary", {}, "Link geht nicht? Text einfügen"),
+      h("div", { class: "field" }, company), h("div", { class: "field" }, title), h("div", { class: "field" }, text), goText));
+}
+
 function renderJobs() {
   const d = state.data;
   const view = h("div", {});
+  view.append(addJobCard());
   const filters = [["all", "Alle"], ["posting", "Vollzeit"], ["working_student", "Werkstudent"], ["new", "Neu"], ["initiative", "Initiativ"]];
   view.append(h("div", { class: "chips" }, filters.map(([key, label]) => {
     const b = h("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === key) }, label);
@@ -261,6 +291,32 @@ function renderJobs() {
   return view;
 }
 
+function creditCard() {
+  const c = state.data.credit;
+  const amount = h("input", { type: "text", inputmode: "decimal", placeholder: "Guthaben aus der Konsole, z. B. 18,40", "aria-label": "Guthaben" });
+  const cur = h("select", { class: "sort", "aria-label": "Währung" }, h("option", { value: "USD" }, "US-Dollar ($)"), h("option", { value: "EUR" }, "Euro (€)"));
+  const save = h("button", { class: "btn", type: "button" }, c ? "Guthaben neu eintragen" : "Guthaben eintragen");
+  save.addEventListener("click", async () => {
+    try {
+      await api("/api/credit", { method: "POST", body: JSON.stringify({ amount: amount.value, currency: cur.value }) });
+      toast("Guthaben gespeichert ✅");
+      await load();
+    } catch (err) { toast(err.message.length > 90 ? "Das hat nicht geklappt." : err.message); }
+  });
+  const body = [h("div", { class: "company" }, "💰 API-Guthaben")];
+  if (c) {
+    const low = c.percent < 20;
+    body.push(
+      h("div", { class: "row" }, h("div", { class: "score" }, `${c.remainingUsd.toFixed(2)} $`), h("div", { class: "sub" }, `≈ ${c.remainingEur.toFixed(2)} €`)),
+      h("div", { class: "bar" + (low ? " over" : "") }, h("span", { style: `width:${Math.min(100, c.percent)}%` })),
+      h("div", { class: "meta" }, `${c.percent} % von ${c.startUsd.toFixed(2)} $${c.setAt ? ` (eingetragen am ${date(c.setAt)})` : ""}${low ? " · wird knapp" : ""}`));
+  } else {
+    body.push(h("div", { class: "meta" }, "Noch nicht eingetragen. Trage dein Guthaben aus der Anthropic-Konsole ein, dann zählt die App ab da herunter."));
+  }
+  body.push(h("div", { class: "field" }, amount), h("div", { class: "field" }, cur), save);
+  return h("div", { class: "card" }, body);
+}
+
 function renderStatus() {
   const s = state.data.status;
   const bar = h("div", { class: "bar" + (s.percent > 100 ? " over" : "") }, h("span", { style: `width:${Math.min(100, s.percent)}%` }));
@@ -268,6 +324,7 @@ function renderStatus() {
   return h("div", {},
     h("div", { class: "card" }, h("div", { class: "row" }, h("div", { class: "company" }, "API-Kosten diesen Monat"), h("div", { class: "score" }, `${s.costEur.toFixed(2)} € / ${s.budgetEur} €`)), bar,
       h("div", { class: "meta" }, `${s.percent} % des Budgets (≈ ${s.costUsd.toFixed(2)} USD)`)),
+    creditCard(),
     h("div", { class: "stats" }, stat(s.qualifying, "passende Stellen"), stat(s.unseen, "davon neu"), stat(s.openJobs, "offene Stellen gesamt"), stat(s.companies, "aktive Firmen"), stat(s.initiatives, "Initiativ-Firmen"), stat(Object.values(s.statuses).reduce((a, b) => a + b, 0), "Bewerbungen")),
     h("div", { class: "card" }, h("div", { class: "company" }, "Benachrichtigungen"), h("div", { class: "meta" }, s.paused ? "⏸ pausiert" : "✅ aktiv")),
     h("p", { class: "sub" }, `Stand: ${new Date(state.data.generatedAt).toLocaleString("de-DE")}`));
