@@ -2,9 +2,10 @@ name: Digest
 
 on:
   schedule:
-    # One run a day, no clock guard: GitHub often starts scheduled runs hours late, and a guard
-    # on the local hour then skipped every digest. 06:00 UTC is 07:00/08:00 in Berlin.
-    - cron: "0 6 * * *"
+    # One run a day, no clock guard: GitHub often starts scheduled runs 6 to 8 hours late, and a
+    # guard on the local hour then skipped every digest. 02:00 UTC is planned so that the late
+    # start lands in the Berlin morning.
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 concurrency:
