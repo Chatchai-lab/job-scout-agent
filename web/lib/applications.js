@@ -7,8 +7,9 @@ export const STATUS = {
   interview: { icon: "🗣", label: "Interview" },
   absage: { icon: "🙁", label: "Absage" },
   angebot: { icon: "🎉", label: "Angebot" },
+  besetzt: { icon: "🚫", label: "Besetzt" },
 };
-const ORDER = ["angebot", "interview", "beworben", "paket", "gemerkt", "absage"];
+const ORDER = ["angebot", "interview", "beworben", "paket", "gemerkt", "absage", "besetzt"];
 const MAX_ROWS = 40;
 
 const esc = (text) =>
@@ -86,6 +87,7 @@ export function cardView(app) {
   const rows = [
     [mark("beworben", "✅ Beworben"), mark("interview", "🗣 Interview")],
     [mark("absage", "🙁 Absage"), mark("angebot", "🎉 Angebot")],
+    [mark("besetzt", "🚫 Besetzt")],
     [{ text: "↩️ Zurücksetzen", callback_data: `st:${reset}:${app.job_id}` }],
   ];
   if (app.cv_pdf_path) {

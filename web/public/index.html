@@ -119,7 +119,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   del(k) { try { localStorage.removeItem(k); } catch {} },
 };
-const ORDER = ["angebot", "interview", "beworben", "paket", "gemerkt", "absage"];
+const ORDER = ["angebot", "interview", "beworben", "paket", "gemerkt", "absage", "besetzt"];
 const TITLES = { apps: "Bewerbungen", jobs: "Stellen", status: "Status" };
 const state = { data: null, detail: null, tab: "apps", filter: "all", query: "", appFilter: "all", appSort: "status" };
 const $ = (id) => document.getElementById(id);
@@ -218,16 +218,27 @@ function renderApps() {
 
   const shown = applications.filter((a) =>
     state.appFilter === "all" || (state.appFilter === "closed" ? a.closed : a.status === state.appFilter));
+  // An open application whose posting is gone moves to the end; interviews, offers and
+  // rejections stay where they are, because they are about the person, not the posting.
+  const stale = (a) => a.closed && ["beworben", "paket", "gemerkt"].includes(a.status);
   if (state.appSort === "status" && state.appFilter === "all") {
     for (const status of present) {
+      const group = shown.filter((x) => x.status === status && !stale(x));
+      if (!group.length) continue;
       view.append(h("div", { class: "group" }, `${statusLabels[status].icon} ${statusLabels[status].label}`));
-      for (const a of shown.filter((x) => x.status === status)) view.append(appCard(a));
+      for (const a of group) view.append(appCard(a));
+    }
+    const gone = shown.filter(stale).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    if (gone.length) {
+      view.append(h("div", { class: "group" }, "⚠️ Stelle geschlossen"));
+      for (const a of gone) view.append(appCard(a));
     }
     return view;
   }
-  const sorted = [...shown].sort(state.appSort === "company"
+  const byOrder = state.appSort === "company"
     ? (a, b) => a.company.localeCompare(b.company, "de")
-    : (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    : (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt));
+  const sorted = [...shown].sort((a, b) => Number(stale(a)) - Number(stale(b)) || byOrder(a, b));
   for (const a of sorted) view.append(appCard(a));
   return view;
 }
@@ -330,7 +341,7 @@ function renderStatus() {
     h("p", { class: "sub" }, `Stand: ${new Date(state.data.generatedAt).toLocaleString("de-DE")}`));
 }
 
-const STATUS_ORDER = ["beworben", "interview", "absage", "angebot"];
+const STATUS_ORDER = ["beworben", "interview", "absage", "angebot", "besetzt"];
 
 function toast(text) {
   const el = h("div", { class: "toast" }, text);
