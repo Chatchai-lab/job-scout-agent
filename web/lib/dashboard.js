@@ -339,13 +339,14 @@ export async function startImport({ db, gh, body }) {
   let entry;
   if (description) {
     const text = String(description).trim();
-    if (text.length < 80 || !String(company ?? "").trim() || !String(title ?? "").trim()) {
-      return { code: 400, body: { error: "Firma, Titel und mindestens ein paar Sätze Text angeben." } };
+    const named = String(company ?? "").trim() && String(title ?? "").trim();
+    // Without company and title the model reads them out of a longer text.
+    if (text.length < (named ? 80 : 200)) {
+      return { code: 400, body: { error: "Bitte den Anzeigentext einfügen (mindestens ein paar Sätze)." } };
     }
     const first = /https?:\/\/[^\s<>"]+/i.exec(text)?.[0] ?? "";
     entry = {
-      company: String(company).trim().slice(0, 80),
-      title: String(title).trim().slice(0, 200),
+      ...(named ? { company: String(company).trim().slice(0, 80), title: String(title).trim().slice(0, 200) } : {}),
       description: text.slice(0, 12000),
       url: String(url ?? first).trim().slice(0, 2000),
     };

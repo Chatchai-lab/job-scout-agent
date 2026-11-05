@@ -25,6 +25,7 @@ from job_scout.triage import posting_from_row, qualifies
 
 log = logging.getLogger(__name__)
 
+PLACEHOLDER_TITLE = "Stelle wird gelesen"  # also written by the web app for a job still to read
 MIN_TEXT = 200  # shorter page text means a login wall, a script-only page or an error page
 MAX_PAGE_CHARS = 15000
 _BROWSER = (
@@ -224,12 +225,18 @@ def run_import(
         return "budget"
 
     fields: dict[str, Any] = {"closed_at": None}
-    if not (row.get("description") or "").strip():
-        try:
-            text = fetch_fn(row["url"])
-        except Exception as exc:
-            log.warning("fetch failed: %s", type(exc).__name__)
-            text = ""
+    pasted = (row.get("description") or "").strip()
+    # Pasted text with a company and title is used as it is; without them the model reads them
+    # out of the text, like it does for a page behind a link.
+    if not pasted or row.get("title") == PLACEHOLDER_TITLE:
+        if pasted:
+            text = pasted[:MAX_PAGE_CHARS]
+        else:
+            try:
+                text = fetch_fn(row["url"])
+            except Exception as exc:
+                log.warning("fetch failed: %s", type(exc).__name__)
+                text = ""
         if len(text) < MIN_TEXT:
             notifier.send(HELP_UNREADABLE)
             repo.delete_job(job_id)

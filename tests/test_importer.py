@@ -173,3 +173,12 @@ def test_job_added_by_hand_counts_even_below_the_thresholds():
     run(repo, job_id, notifier, score=result(fit=4, reach=4))
     assert "erscheint im nächsten Digest" in notifier.sent[-1][0]
     assert repo.scores[job_id]["notified_at"] is None
+
+
+def test_pasted_text_without_company_and_title_is_read_by_the_model():
+    row = placeholder(description=LONG, url="")  # the web app stores the placeholder title
+    repo, job_id, notifier = setup(row)
+    outcome, calls = run(repo, job_id, notifier)
+    assert outcome == "sent" and calls == {"fetch": 0, "read": 1, "score": 1}
+    assert repo.jobs[0]["company_name"] == "Beispiel GmbH"
+    assert repo.jobs[0]["title"] == "Software Engineer (m/w/d)"

@@ -225,7 +225,10 @@ test("startImport accepts a link or pasted text and rejects the rest", async () 
   const text = "Aufgaben: Entwicklung von KI-Anwendungen mit Python und Cloud. ".repeat(3);
   assert.equal((await startImport({ ...f, body: { company: "Acme", title: "Dev", description: text } })).code, 200);
   assert.equal(calls[2][1].company, "Acme");
-  for (const body of [{}, { url: "ftp://x" }, { url: "javascript:alert(1)" }, { company: "A", title: "B", description: "zu kurz" }, { description: text }]) {
+  const bare = await startImport({ ...f, body: { description: text + text } }); // no company/title: the model reads them
+  assert.equal(bare.code, 200);
+  assert.equal(calls.at(-2)[1].company, undefined);
+  for (const body of [{}, { url: "ftp://x" }, { url: "javascript:alert(1)" }, { company: "A", title: "B", description: "zu kurz" }, { description: "kurz" }]) {
     assert.equal((await startImport({ ...f, body })).code, 400, JSON.stringify(body));
   }
   assert.equal((await startImport({ db: f.db, gh: { configured: false }, body: { url: "https://a.de" } })).code, 503);

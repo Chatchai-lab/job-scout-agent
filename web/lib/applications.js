@@ -170,7 +170,8 @@ export function parseJobImport(text) {
   const raw = String(text ?? "").trim();
   if (/^https?:\/\/\S+$/i.test(raw)) return { url: raw.slice(0, 2000) };
   const match = /^(?:stelle|job)\s+([\s\S]+)$/i.exec(raw);
-  if (!match) return null;
+  // A long text without any prefix is an ad pasted as it is; the model finds company and title.
+  if (!match) return raw.length >= LONG_TEXT ? pastedAd(raw) : null;
   const body = match[1].trim();
   if (/^https?:\/\/\S+$/i.test(body)) return { url: body.slice(0, 2000) };
   const [head, ...rest] = body.split("\n");
@@ -188,8 +189,20 @@ export function parseJobImport(text) {
       };
     }
   }
-  return { help: true };
+  return body.length >= LONG_TEXT ? pastedAd(body) : { help: true };
 }
+
+const LONG_TEXT = 200;
+const pastedAd = (text) => ({
+  description: text.slice(0, 12000),
+  url: (URL_RE.exec(text)?.[0] ?? "").slice(0, 2000),
+});
+
+export const UNKNOWN_HELP =
+  "Das habe ich nicht verstanden. Das kann ich:\n" +
+  "• Eine Stelle aufnehmen: den Link schicken oder den ganzen Anzeigentext einfügen\n" +
+  "• <code>Initiativ Firma: …</code> für eine Initiativbewerbung\n" +
+  "• /bewerbungen, /initiativ, /status";
 
 export const IMPORT_HELP =
   "So schickst du mir eine Stelle:\n" +

@@ -7,6 +7,7 @@ import {
   initiativeCard,
   initiativeListView,
   IMPORT_HELP,
+  UNKNOWN_HELP,
   letterPath,
   LIMITS,
   NOT_FULL_TIME,
@@ -411,6 +412,10 @@ async function handleMessage(message, { db, tg, gh, chatId }) {
     const view = initiativeCard(job);
     await tg.send(chatId, view.text, view.markup);
     return "initiative_created";
+  }
+  if (String(message.text ?? "").trim()) {
+    await tg.send(chatId, UNKNOWN_HELP); // never stay silent about a message that was not understood
+    return "unknown";
   }
   return "ignored";
 }

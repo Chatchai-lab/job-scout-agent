@@ -40,6 +40,13 @@ test("parsing: bare link, Stelle + link, Stelle + pasted text, help, and unrelat
   assert.deepEqual(parseJobImport("Stelle Beispiel GmbH: Titel\nzu kurz"), { help: true });
   assert.deepEqual(parseJobImport("Stelle irgendwas"), { help: true });
   assert.equal(parseJobImport("Hallo, schau mal https://firma.de"), null);
+  // a whole ad pasted without any prefix: company and title are read from the text
+  const ad = `Data Engineer Dataciders: (Junior) Data Engineer (m/w/d)\n${TEXT.repeat(2)}\nhttps://firma.de/j/9`;
+  const pasted2 = parseJobImport(ad);
+  assert.equal(pasted2.company, undefined);
+  assert.ok(pasted2.description.startsWith("Data Engineer Dataciders"));
+  assert.equal(pasted2.url, "https://firma.de/j/9");
+  assert.ok(parseJobImport(`Stelle ${TEXT.repeat(2)}`).description.startsWith("Aufgaben"));
   assert.equal(parseJobImport("Initiativ Merck: Werkstudent"), null);
   assert.equal(parseJobImport(""), null);
 });

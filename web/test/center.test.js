@@ -128,7 +128,8 @@ test("/start registers the menu command, /bewerbungen sends the list", async () 
   assert.equal(sends.length, 2);
   assert.ok(sends[0][1].includes("bereit"));
   assert.equal(sends[1][2].inline_keyboard.length, 1);  // the list, one row per application
-  assert.equal(await handleUpdate(message("hallo"), f), "ignored");
+  assert.equal(await handleUpdate(message("hallo"), f), "unknown");  // answered, never silent
+  assert.ok(f.calls.filter((c) => c[0] === "send").at(-1)[1].includes("Das habe ich nicht verstanden"));
 });
 
 test("messages from other chats are ignored", async () => {
