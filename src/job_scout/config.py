@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     model_match: str = "claude-haiku-5-5"
     model_package: str = "claude-sonnet-5-5"
+    model_draft: str = ""  # package draft; empty = model_package (the fact check keeps it)
     monthly_budget_eur: float = 5.0
     digest_max_jobs: int = 7
     reminder_days: int = 14  # nudge for applications without news after this many days

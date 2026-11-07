@@ -503,3 +503,30 @@ def test_each_call_is_booked_once_in_a_normal_run(tmp_path: Path):
     run_package(repo, Settings(), ScriptedClient([_draft()], [[]]), FakeNotifier(), "job-1",
                 build_pdf=_fake_build, workdir=tmp_path)
     assert len(repo.usage) == 2  # draft + fact check, not doubled
+
+
+def test_draft_can_use_another_model_while_the_fact_check_keeps_the_usual_one(tmp_path: Path):
+    seen: list[str] = []
+    inner = ScriptedClient([_draft()], [[]])
+    original = inner.messages.create
+
+    def spy(**kwargs):
+        seen.append(kwargs["model"])
+        return original(**kwargs)
+
+    inner.messages.create = spy
+    repo = _repo_with_job()
+    run_package(repo, Settings(model_draft="claude-haiku-5-5"), inner, FakeNotifier(), "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    assert seen == ["claude-haiku-5-5", Settings().model_package]
+    assert [u["model"] for u in repo.usage] == seen  # each call is booked at its own price
+
+
+def test_without_a_draft_model_everything_runs_on_the_usual_one(tmp_path: Path):
+    seen: list[str] = []
+    inner = ScriptedClient([_draft()], [[]])
+    original = inner.messages.create
+    inner.messages.create = lambda **kw: (seen.append(kw["model"]), original(**kw))[1]
+    run_package(_repo_with_job(), Settings(), inner, FakeNotifier(), "job-1",
+                build_pdf=_fake_build, workdir=tmp_path)
+    assert set(seen) == {Settings().model_package}

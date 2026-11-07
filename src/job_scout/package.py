@@ -303,8 +303,9 @@ def create_package(
     feedback: list[str] | None = None
 
     for attempt in range(MAX_ATTEMPTS):
-        draft, u = draft_package(client, settings.model_package, profile_text, job, feedback)
-        usage.append((settings.model_package, u))
+        draft_model = settings.model_draft or settings.model_package
+        draft, u = draft_package(client, draft_model, profile_text, job, feedback)
+        usage.append((draft_model, u))
         selection = build_selection(draft, profile)
         rewrites = selection["rewrites"]
 

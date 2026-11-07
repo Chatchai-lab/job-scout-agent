@@ -7,6 +7,11 @@ on:
         description: Job id (uuid) to build the application package for
         type: string
         required: true
+      draft_model:
+        description: Model for the draft (empty = the usual one); the fact check keeps the usual model
+        type: string
+        required: false
+        default: ""
       language:
         description: Language of the letter and the CV headings (de or en)
         type: choice
@@ -39,6 +44,7 @@ jobs:
         env:
           JOB_ID: ${{ inputs.job_id }}
           LANGUAGE: ${{ inputs.language || 'de' }}
+          MODEL_DRAFT: ${{ inputs.draft_model }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
